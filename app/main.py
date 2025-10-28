@@ -7,6 +7,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+import mlflow
+
 import structlog
 import logging
 import sys
@@ -18,6 +20,17 @@ from app.core.storage import init_storage
 from app.core.cache import init_cache, close_cache
 from app.api.router import api_router
 from app.core.exceptions import VectorlessRAGException
+from app.services.gemini_service import gemini_service
+from app.services.tree_merger_service import tree_merger_service
+import os
+
+
+os.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://minio:9000"
+
+mlflow.set_tracking_uri("http://mlflow:5000")
+mlflow.set_experiment("PydanticAI")
+
+# mlflow.pydantic_ai.autolog()
 
 
 def configure_logging():
@@ -107,6 +120,10 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Vectorless RAG application")
 
     try:
+        # Clean up services first to prevent HTTP client errors
+        await gemini_service.cleanup()
+        await tree_merger_service.cleanup()
+
         await close_cache()
         await close_database()
         logger.info("Application shutdown completed")

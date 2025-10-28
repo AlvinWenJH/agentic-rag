@@ -74,48 +74,6 @@ def get_storage_client() -> Minio:
     return _client
 
 
-async def upload_file(
-    bucket: str,
-    object_name: str,
-    file_path: str,
-    content_type: str = "application/octet-stream",
-) -> str:
-    """Upload a file to MinIO storage."""
-    try:
-        client = get_storage_client()
-        loop = asyncio.get_event_loop()
-
-        # Upload file
-        await loop.run_in_executor(
-            None,
-            partial(
-                client.fput_object,
-                bucket,
-                object_name,
-                file_path,
-                content_type=content_type,
-            ),
-        )
-
-        logger.info(
-            "File uploaded successfully",
-            bucket=bucket,
-            object_name=object_name,
-            file_path=file_path,
-        )
-
-        return object_name
-
-    except S3Error as e:
-        logger.error(
-            "Failed to upload file",
-            bucket=bucket,
-            object_name=object_name,
-            error=str(e),
-        )
-        raise StorageError(f"Failed to upload file: {str(e)}")
-
-
 async def upload_file_data(
     bucket: str,
     object_name: str,

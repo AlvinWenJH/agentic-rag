@@ -7,14 +7,21 @@ This document provides comprehensive implementation guidance for JSON Patch inte
 ## Role and Purpose
 
 ### Primary Function
+
 JSON Patch handles all **tree structure operations** by:
-- **Receiving structured topic data** from Gemini Flash visual analysis
-- **Creating hierarchical tree structures** from visual analysis results
-- **Managing tree modifications** and updates over time
-- **Maintaining tree integrity** and consistency
-- **Enabling atomic tree operations** for reliable updates
+
+* **Receiving structured topic data** from Gemini Flash visual analysis
+
+* **Creating hierarchical tree structures** from visual analysis results
+
+* **Managing tree modifications** and updates over time
+
+* **Maintaining tree integrity** and consistency
+
+* **Enabling atomic tree operations** for reliable updates
 
 ### Integration Context
+
 ```mermaid
 graph TD
     A[PDF Upload] --> B[PyPDF Image Conversion]
@@ -42,6 +49,7 @@ graph TD
 ## Technical Specifications
 
 ### Dependencies
+
 ```python
 # Core JSON Patch library
 jsonpatch==1.32
@@ -56,6 +64,7 @@ pydantic==2.5.0     # Data validation
 ### Core Components
 
 #### 1. Tree Structure Models
+
 ```python
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
@@ -95,6 +104,7 @@ class TreePatch(BaseModel):
 ```
 
 #### 2. Visual Analysis Data Processor
+
 ```python
 import json
 from typing import Dict, List
@@ -173,6 +183,7 @@ class VisualAnalysisProcessor:
 ```
 
 #### 3. JSON Patch Tree Manager
+
 ```python
 import jsonpatch
 from jsonschema import validate, ValidationError
@@ -494,6 +505,7 @@ class TreePatchManager:
 ```
 
 #### 4. MongoDB Integration
+
 ```python
 from pymongo import MongoClient
 from typing import Optional
@@ -567,6 +579,7 @@ class TreeRepository:
 ## Integration Points
 
 ### 1. Gemini Flash Integration
+
 ```python
 class GeminiTreeIntegration:
     """Integration layer between Gemini analysis and tree formation"""
@@ -610,6 +623,7 @@ class GeminiTreeIntegration:
 ```
 
 ### 2. FastAPI Integration
+
 ```python
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
@@ -665,36 +679,57 @@ async def update_tree(
 ## Development Tasks
 
 ### Phase 1: Core Implementation (Week 1)
-- [ ] Setup JSON Patch library and dependencies
-- [ ] Implement Pydantic models for tree structures
-- [ ] Create VisualAnalysisProcessor class
-- [ ] Implement basic TreePatchManager functionality
-- [ ] Setup unit tests for core components
+
+* [ ] Setup JSON Patch library and dependencies
+
+* [ ] Implement Pydantic models for tree structures
+
+* [ ] Create VisualAnalysisProcessor class
+
+* [ ] Implement basic TreePatchManager functionality
+
+* [ ] Setup unit tests for core components
 
 ### Phase 2: Tree Operations (Week 2)
-- [ ] Implement add/remove/move node operations
-- [ ] Create tree validation and integrity checks
-- [ ] Implement patch generation methods
-- [ ] Add comprehensive error handling
-- [ ] Create integration tests
+
+* [ ] Implement add/remove/move node operations
+
+* [ ] Create tree validation and integrity checks
+
+* [ ] Implement patch generation methods
+
+* [ ] Add comprehensive error handling
+
+* [ ] Create integration tests
 
 ### Phase 3: Database Integration (Week 3)
-- [ ] Implement MongoDB TreeRepository
-- [ ] Setup database indexes and optimization
-- [ ] Implement patch history tracking
-- [ ] Add backup and recovery mechanisms
-- [ ] Performance testing and optimization
+
+* [ ] Implement MongoDB TreeRepository
+
+* [ ] Setup database indexes and optimization
+
+* [ ] Implement patch history tracking
+
+* [ ] Add backup and recovery mechanisms
+
+* [ ] Performance testing and optimization
 
 ### Phase 4: API Integration (Week 4)
-- [ ] Create FastAPI endpoints for tree operations
-- [ ] Implement Gemini integration layer
-- [ ] Add authentication and authorization
-- [ ] Create comprehensive API documentation
-- [ ] End-to-end testing
+
+* [ ] Create FastAPI endpoints for tree operations
+
+* [ ] Implement Gemini integration layer
+
+* [ ] Add authentication and authorization
+
+* [ ] Create comprehensive API documentation
+
+* [ ] End-to-end testing
 
 ## Testing Strategy
 
 ### Unit Tests
+
 ```python
 import pytest
 from unittest.mock import Mock
@@ -744,6 +779,7 @@ class TestTreePatchManager:
 ```
 
 ### Integration Tests
+
 ```python
 class TestGeminiTreeIntegration:
     async def test_visual_analysis_processing(self):
@@ -755,27 +791,41 @@ class TestGeminiTreeIntegration:
 ## Performance Considerations
 
 ### Optimization Strategies
-- **Lazy Loading**: Load tree nodes on demand for large documents
-- **Caching**: Cache frequently accessed trees in Redis
-- **Batch Operations**: Process multiple patches in single transaction
-- **Index Optimization**: Efficient MongoDB indexes for tree queries
-- **Memory Management**: Efficient handling of large tree structures
+
+* **Lazy Loading**: Load tree nodes on demand for large documents
+
+* **Caching**: Cache frequently accessed trees in Redis
+
+* **Batch Operations**: Process multiple patches in single transaction
+
+* **Index Optimization**: Efficient MongoDB indexes for tree queries
+
+* **Memory Management**: Efficient handling of large tree structures
 
 ### Performance Targets
-- **Tree Creation**: < 5 seconds for 100-page document
-- **Patch Application**: < 100ms for single operation
-- **Tree Retrieval**: < 200ms from database
-- **Memory Usage**: < 50MB per tree in memory
+
+* **Tree Creation**: < 5 seconds for 100-page document
+
+* **Patch Application**: < 100ms for single operation
+
+* **Tree Retrieval**: < 200ms from database
+
+* **Memory Usage**: < 50MB per tree in memory
 
 ## Security Requirements
 
 ### Data Protection
-- **Input Validation**: Validate all patch operations
-- **Access Control**: Role-based tree modification permissions
-- **Audit Trail**: Complete patch history tracking
-- **Data Integrity**: Atomic operations and rollback capabilities
+
+* **Input Validation**: Validate all patch operations
+
+* **Access Control**: Role-based tree modification permissions
+
+* **Audit Trail**: Complete patch history tracking
+
+* **Data Integrity**: Atomic operations and rollback capabilities
 
 ### Security Implementation
+
 ```python
 class SecureTreeManager(TreePatchManager):
     """Security-enhanced tree manager"""
@@ -801,6 +851,7 @@ class SecureTreeManager(TreePatchManager):
 ## Deployment Configuration
 
 ### Docker Configuration
+
 ```dockerfile
 # JSON Patch service configuration
 FROM python:3.11-slim
@@ -818,6 +869,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ### Environment Variables
+
 ```bash
 # JSON Patch configuration
 JSON_PATCH_VALIDATION_ENABLED=true
@@ -836,6 +888,7 @@ PATCH_BATCH_SIZE=100
 ## Monitoring and Logging
 
 ### Metrics Collection
+
 ```python
 import time
 from functools import wraps
@@ -865,12 +918,17 @@ def monitor_tree_operations(func):
 ```
 
 ### Key Metrics
-- **Operation Latency**: Time for patch operations
-- **Tree Size**: Number of nodes per tree
-- **Error Rates**: Failed operations percentage
-- **Memory Usage**: Tree storage efficiency
-- **Database Performance**: Query execution times
 
----
+* **Operation Latency**: Time for patch operations
+
+* **Tree Size**: Number of nodes per tree
+
+* **Error Rates**: Failed operations percentage
+
+* **Memory Usage**: Tree storage efficiency
+
+* **Database Performance**: Query execution times
+
+***
 
 *This JSON Patch implementation provides robust tree management capabilities for the Vectorless RAG system, processing structured data from Gemini's visual analysis into maintainable hierarchical structures.*

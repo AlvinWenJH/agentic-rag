@@ -7,8 +7,36 @@ x-basic-config: &basic-config
       max-size: "10m"
       max-file: "3"
       labels: "service,version"
+  networks:
+    - app
 
 services:
+  mlflow:
+    build:
+      context: ./
+      dockerfile: Dockerfile.mlflow
+    container_name: vectorless-rag-mlflow
+    depends_on:
+      - postgredb
+      - minio
+    environment:
+      - MLFLOW_TRACKING_LOG_LEVEL=INFO
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password123
+      - MLFLOW_S3_IGNORE_TLS=true
+      - MLFLOW_TRACKING_INSECURE_TLS=true
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server  --host 0.0.0.0  --port 5000 --backend-store-uri postgresql://postgres:password123@postgredb:5432/postgres --default-artifact-root s3://mlflow --artifacts-destination s3://mlflow --allowed-hosts * --cors-allowed-origins *
+    <<: *basic-config 
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
   # FastAPI Backend
   backend:
     build: .
@@ -68,6 +96,24 @@ services:
       retries: 3
     <<: *basic-config 
 
+  postgredb:
+    image: postgres:15-alpine
+    container_name: vectorless-rag-postgredb
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+      - POSTGRES_PASSWORD=password123
+      # PostgreSQL memory optimization
+      - POSTGRES_SHARED_BUFFERS=128MB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=256MB
+      - POSTGRES_WORK_MEM=4MB
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    <<: *basic-config 
+
+
   # MinIO Object Storage
   minio:
     image: minio/minio:latest
@@ -76,8 +122,8 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password123
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -98,11 +144,13 @@ services:
     entrypoint: >
       /bin/sh -c "
       sleep 10;
-      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc alias set myminio http://minio:9000 admin password123;
       /usr/bin/mc mb myminio/documents --ignore-existing;
       /usr/bin/mc mb myminio/images --ignore-existing;
-      /usr/bin/mc policy set public myminio/documents;
-      /usr/bin/mc policy set public myminio/images;
+      /usr/bin/mc mb myminio/mlflow --ignore-existing;
+      /usr/bin/mc anonymous  set public myminio/documents;
+      /usr/bin/mc anonymous  set public myminio/images;
+      /usr/bin/mc anonymous  set public myminio/mlflow;
       echo 'MinIO buckets created successfully';
       "
     restart: "no"
@@ -115,7 +163,9 @@ volumes:
     driver: local
   minio_data:
     driver: local
+  postgres-data:
+    driver: local
 
 networks:
-  default:
-    name: vectorless-rag-network
+  app:
+    name: app

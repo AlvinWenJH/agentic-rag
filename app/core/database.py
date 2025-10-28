@@ -21,9 +21,9 @@ _database: Optional[AsyncIOMotorDatabase] = None
 async def init_database() -> None:
     """Initialize database connection."""
     global _client, _database
-    
+
     settings = get_settings()
-    
+
     try:
         # Create MongoDB client
         _client = AsyncIOMotorClient(
@@ -34,19 +34,19 @@ async def init_database() -> None:
             connectTimeoutMS=5000,
             socketTimeoutMS=5000,
         )
-        
+
         # Get database
         _database = _client[settings.MONGODB_DATABASE]
-        
+
         # Test connection
-        await _client.admin.command('ping')
-        
+        await _client.admin.command("ping")
+
         logger.info(
             "Database connection established",
             database=settings.MONGODB_DATABASE,
-            url=settings.MONGODB_URL.split('@')[-1]  # Hide credentials
+            url=settings.MONGODB_URL.split("@")[-1],  # Hide credentials
         )
-        
+
     except (ConnectionFailure, ServerSelectionTimeoutError) as e:
         logger.error("Failed to connect to MongoDB", error=str(e))
         raise DatabaseError(f"Failed to connect to database: {str(e)}")
@@ -58,7 +58,7 @@ async def init_database() -> None:
 async def close_database() -> None:
     """Close database connection."""
     global _client
-    
+
     if _client:
         _client.close()
         logger.info("Database connection closed")
@@ -74,7 +74,9 @@ def get_database() -> AsyncIOMotorDatabase:
 def get_client() -> AsyncIOMotorClient:
     """Get database client instance."""
     if _client is None:
-        raise DatabaseError("Database client not initialized. Call init_database() first.")
+        raise DatabaseError(
+            "Database client not initialized. Call init_database() first."
+        )
     return _client
 
 
@@ -84,9 +86,9 @@ def get_documents_collection():
     return get_database().documents
 
 
-def get_trees_collection():
-    """Get trees collection."""
-    return get_database().trees
+def get_subtrees_collection():
+    """Get subtrees collection."""
+    return get_database().subtrees
 
 
 def get_users_collection():
@@ -97,3 +99,8 @@ def get_users_collection():
 def get_queries_collection():
     """Get queries collection."""
     return get_database().queries
+
+
+def get_tree_collection():
+    """Get tree collection."""
+    return get_database().tree

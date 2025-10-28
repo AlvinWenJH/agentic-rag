@@ -1,0 +1,230 @@
+
+ Fetch subtrees: 
+ /
+ Thesis Title Page
+ 1
+ 
+ /children/0
+ Thesis Main Title
+ 1
+ 
+ /children/0/children/0
+ Development of a Markerless Motion Capture System Based on Openpose
+ 1
+ 
+ /children/1
+ Submission Details
+ 1
+ 
+ /children/1/children/0
+ Document Type
+ 1
+ 
+ /children/1/children/1
+ Fulfillment Statement
+ 1
+ 
+ /children/1/children/2
+ Institution
+ 1
+ 
+ /children/2
+ Author Information
+ 1
+ 
+ /children/2/children/0
+ Author Name
+ 1
+ 
+ /children/2/children/1
+ Student ID
+ 1
+ 
+ /children/2/children/2
+ Faculty
+ 1
+ 
+ /children/3
+ Publication Details
+ 1
+ 
+ /children/3/children/0
+ Publishing Institution
+ 1
+ 
+ /children/3/children/1
+ Publication Date
+ 1
+ 
+ /children/4
+ Chapter I Introduction
+ 2
+ 
+ /children/4/children/0
+ I.1 Research Background
+ 2,4
+ 
+ /children/4/children/0/children/0
+ Lack of Markerless Motion Capture in ITB Biomechanical Laboratory
+ 4
+ 
+ /children/4/children/0/children/1
+ OpenPose Accuracy Limitations
+ 4
+ 
+ /children/4/children/1
+ Motion Capture and Pose Estimation Methods
+ 3
+ 
+ /children/4/children/1/children/0
+ Active Marker-Based Motion Capture
+ 3
+ 
+ /children/4/children/1/children/1
+ Markerless Motion Capture (2020 Method)
+ 3
+ 
+ /children/4/children/1/children/2
+ Human Pose Estimation with AI/Deep Learning
+ 3
+ 
+ /children/5
+ 1.5 Methodology
+ 5,7
+ 
+ /children/5/children/0
+ Color-based Motion Capture
+ 5
+ 
+ /children/5/children/0/children/0
+ Implementation with Python and OpenCV
+ 5
+ 
+ /children/5/children/0/children/1
+ Color Space Conversion and Blob Detection
+ 5
+ 
+ /children/5/children/0/children/2
+ Marker Creation
+ 5
+ 
+ /children/5/children/1
+ Fine-tuning OpenPose
+ 5
+ 
+ /children/5/children/1/children/0
+ Data Collection and Preprocessing
+ 5,7
+ 
+ /children/5/children/1/children/1
+ Dataset Creation and Model Training
+ 5,7
+ 
+ /children/5/children/1/children/2
+ Model Evaluation and Deployment
+ 5,7
+ 
+ /children/5/children/2
+ Project Context and Deployment
+ 6
+ 
+ /children/5/children/2/children/0
+ Key Technologies
+ 6
+ 
+ /children/5/children/2/children/1
+ Research Scope and Deployment
+ 6
+ 
+ /children/5/children/2/children/2
+ Project Repository
+ 6
+ 
+ /children/5/children/3
+ Data Collection and Preparation
+ 7
+ 
+ /children/5/children/3/children/0
+ Collecting Data
+ 7
+ 
+ /children/5/children/3/children/1
+ Input Data Handling
+ 7
+ 
+ /children/5/children/3/children/2
+ Label Data Processing
+ 7
+ 
+ /children/5/children/3/children/3
+ Data Preprocessing
+ 7
+ 
+ /children/5/children/3/children/4
+ COCO Format Conversion
+ 7
+ 
+ /children/5/children/3/children/5
+ Dataset Formation
+ 7
+ 
+ /children/5/children/4
+ Dataset Splitting and Model Training
+ 7
+ 
+ /children/5/children/4/children/0
+ Split Dataset
+ 7
+ 
+ /children/5/children/4/children/1
+ Training Set
+ 7
+ 
+ /children/5/children/4/children/2
+ Test Set
+ 7
+ 
+ /children/5/children/4/children/3
+ Fine-tuning
+ 7
+ 
+ /children/5/children/5
+ Model Evaluation and Validation
+ 7
+ 
+ /children/5/children/5/children/0
+ Evaluating Initial Performance
+ 7
+ 
+ /children/5/children/5/children/1
+ Performance Check (Initial)
+ 7
+ 
+ /children/5/children/5/children/2
+ Test Model with No Marker Video
+ 7
+ 
+ /children/5/children/5/children/3
+ Performance Check (Final)
+ 7
+ 
+ /children/6
+ Research Overview
+ 6
+ 
+ /children/6/children/0
+ Project Context and Deployment
+ 6
+ 
+ /children/6/children/0/children/0
+ Key Technologies
+ 6
+ 
+ /children/6/children/0/children/1
+ Research Scope and Deployment
+ 6
+ 
+ /children/6/children/0/children/2
+ Project Repository
+ 6
+ 

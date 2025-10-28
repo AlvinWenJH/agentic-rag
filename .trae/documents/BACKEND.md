@@ -7,26 +7,40 @@ This document provides comprehensive implementation guidance for the complete ba
 ### Purpose and Role
 
 The backend architecture serves as:
-- **Central Orchestration Hub**: Coordinates all system components and services
-- **API Gateway**: Provides unified REST API interface for frontend applications
-- **Processing Pipeline Manager**: Orchestrates document processing workflows
-- **Data Access Layer**: Manages interactions with MongoDB, MinIO, and Redis
-- **Security Enforcement**: Implements authentication, authorization, and data protection
-- **Performance Optimization**: Handles caching, rate limiting, and resource management
+
+* **Central Orchestration Hub**: Coordinates all system components and services
+
+* **API Gateway**: Provides unified REST API interface for frontend applications
+
+* **Processing Pipeline Manager**: Orchestrates document processing workflows
+
+* **Data Access Layer**: Manages interactions with MongoDB, MinIO, and Redis
+
+* **Security Enforcement**: Implements authentication, authorization, and data protection
+
+* **Performance Optimization**: Handles caching, rate limiting, and resource management
 
 ## Technical Specifications
 
 ### Core Architecture Requirements
 
 Based on **Section 5.1** technology stack from PRD:
-- **Framework**: FastAPI 0.104+ with async/await support
-- **Language**: Python 3.11+ with type hints
-- **Database**: MongoDB 7.0+ with Motor async driver
-- **Object Storage**: MinIO with async client
-- **Caching**: Redis 7.2+ with async support
-- **Authentication**: JWT tokens with OAuth2 flows
-- **Validation**: Pydantic v2 for data validation
-- **Testing**: pytest with async support
+
+* **Framework**: FastAPI 0.104+ with async/await support
+
+* **Language**: Python 3.11+ with type hints
+
+* **Database**: MongoDB 7.0+ with Motor async driver
+
+* **Object Storage**: MinIO with async client
+
+* **Caching**: Redis 7.2+ with async support
+
+* **Authentication**: JWT tokens with OAuth2 flows
+
+* **Validation**: Pydantic v2 for data validation
+
+* **Testing**: pytest with async support
 
 ### System Architecture
 
@@ -175,6 +189,7 @@ app/
 ### 2. Main Application Setup
 
 **app/main.py**
+
 ```python
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -307,6 +322,7 @@ if __name__ == "__main__":
 ### 3. Configuration Management
 
 **app/config/settings.py**
+
 ```python
 from pydantic_settings import BaseSettings
 from pydantic import Field, validator
@@ -409,6 +425,7 @@ def get_settings() -> Settings:
 ### 4. Database Connection Management
 
 **app/config/database.py**
+
 ```python
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from redis.asyncio import Redis
@@ -514,7 +531,8 @@ def get_minio() -> Minio:
 
 ### 5. Service Layer Implementation
 
-**app/services/document_service.py**
+**app/services/document\_service.py**
+
 ```python
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -703,7 +721,57 @@ class DocumentService:
 ### 6. API Dependencies
 
 **app/api/dependencies.py**
+
 ```python
+sequenceDiagram
+    participant C as Client
+    participant A as FastAPI
+    participant DS as Document Service
+    participant PP as PyPDF Processor
+    participant GP as Gemini Processor
+    participant TS as Tree Service
+    participant JP as JSON Patch
+    participant QS as Query Service
+    participant AI as Pydantic AI
+    participant DB as MongoDB
+    participant S3 as MinIO
+    participant R as Redis
+    
+    C->>A: Upload Document
+    A->>DS: Process Document
+    DS->>S3: Store File
+    DS->>PP: Extract Text/Images
+    DS->>GP: Analyze Images
+    DS->>DB: Save Results
+    
+    C->>A: Create Tree
+    A->>TS: Build Tree Structure
+    TS->>JP: Apply Patches
+    TS->>DB: Store Tree
+    
+    C->>A: Query Document
+    A->>QS: Process Query
+    QS->>R: Check Cache
+    QS->>AI: Analyze Query
+    QS->>DB: Retrieve Data
+    QS->>A: Return Results
+```
+
+## Integration Points
+
+### 1. Service Integration Matrix
+
+| Service              | Integrates With               | Purpose                            |
+| -------------------- | ----------------------------- | ---------------------------------- |
+| **Document Service** | PyPDF, Gemini, MongoDB, MinIO | Document processing pipeline       |
+| **Tree Service**     | JSON Patch, MongoDB           | Tree structure management          |
+| **Query Service**    | Pydantic AI, MongoDB, Redis   | Intelligent query processing       |
+| **User Service**     | MongoDB, JWT                  | User management and authentication |
+| **Storage Service**  | MinIO, Redis                  | File and cache management          |
+
+### 2. Data Flow Integration
+
+```mermaid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
@@ -849,88 +917,60 @@ async def get_current_user_optional(
         return None
 ```
 
-## Integration Points
-
-### 1. Service Integration Matrix
-
-| Service | Integrates With | Purpose |
-|---------|----------------|---------|
-| **Document Service** | PyPDF, Gemini, MongoDB, MinIO | Document processing pipeline |
-| **Tree Service** | JSON Patch, MongoDB | Tree structure management |
-| **Query Service** | Pydantic AI, MongoDB, Redis | Intelligent query processing |
-| **User Service** | MongoDB, JWT | User management and authentication |
-| **Storage Service** | MinIO, Redis | File and cache management |
-
-### 2. Data Flow Integration
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant A as FastAPI
-    participant DS as Document Service
-    participant PP as PyPDF Processor
-    participant GP as Gemini Processor
-    participant TS as Tree Service
-    participant JP as JSON Patch
-    participant QS as Query Service
-    participant AI as Pydantic AI
-    participant DB as MongoDB
-    participant S3 as MinIO
-    participant R as Redis
-    
-    C->>A: Upload Document
-    A->>DS: Process Document
-    DS->>S3: Store File
-    DS->>PP: Extract Text/Images
-    DS->>GP: Analyze Images
-    DS->>DB: Save Results
-    
-    C->>A: Create Tree
-    A->>TS: Build Tree Structure
-    TS->>JP: Apply Patches
-    TS->>DB: Store Tree
-    
-    C->>A: Query Document
-    A->>QS: Process Query
-    QS->>R: Check Cache
-    QS->>AI: Analyze Query
-    QS->>DB: Retrieve Data
-    QS->>A: Return Results
-```
-
 ## Development Tasks
 
 ### Phase 1: Core Backend (Week 1-2)
-- [ ] Setup FastAPI application structure
-- [ ] Implement configuration management
-- [ ] Create database connection management
-- [ ] Setup dependency injection system
-- [ ] Implement basic middleware and exception handling
+
+* [ ] Setup FastAPI application structure
+
+* [ ] Implement configuration management
+
+* [ ] Create database connection management
+
+* [ ] Setup dependency injection system
+
+* [ ] Implement basic middleware and exception handling
 
 ### Phase 2: Service Layer (Week 3-4)
-- [ ] Implement document service with processing pipeline
-- [ ] Create tree service with JSON Patch integration
-- [ ] Build query service with AI integration
-- [ ] Develop user service with authentication
-- [ ] Setup storage service for file management
+
+* [ ] Implement document service with processing pipeline
+
+* [ ] Create tree service with JSON Patch integration
+
+* [ ] Build query service with AI integration
+
+* [ ] Develop user service with authentication
+
+* [ ] Setup storage service for file management
 
 ### Phase 3: API Layer (Week 5-6)
-- [ ] Create REST API endpoints for all services
-- [ ] Implement authentication and authorization
-- [ ] Add rate limiting and security middleware
-- [ ] Setup comprehensive error handling
-- [ ] Create API documentation
+
+* [ ] Create REST API endpoints for all services
+
+* [ ] Implement authentication and authorization
+
+* [ ] Add rate limiting and security middleware
+
+* [ ] Setup comprehensive error handling
+
+* [ ] Create API documentation
 
 ### Phase 4: Integration & Testing (Week 7-8)
-- [ ] Integrate all processors and services
-- [ ] Implement comprehensive testing suite
-- [ ] Performance optimization and caching
-- [ ] Security hardening and validation
-- [ ] Documentation and deployment preparation
+
+* [ ] Integrate all processors and services
+
+* [ ] Implement comprehensive testing suite
+
+* [ ] Performance optimization and caching
+
+* [ ] Security hardening and validation
+
+* [ ] Documentation and deployment preparation
 
 ## Testing Strategy
 
 ### Unit Testing
+
 ```python
 # Example unit test for document service
 import pytest
@@ -964,6 +1004,7 @@ async def test_create_document():
 ```
 
 ### Integration Testing
+
 ```python
 # Example integration test
 import pytest
@@ -997,37 +1038,57 @@ async def test_document_upload_flow():
 ## Performance Considerations
 
 ### Optimization Strategies
-- **Async Processing**: Non-blocking operations for better concurrency
-- **Connection Pooling**: Efficient database connection management
-- **Caching**: Redis for frequently accessed data
-- **Background Tasks**: Async processing for heavy operations
-- **Resource Management**: Proper memory and CPU utilization
+
+* **Async Processing**: Non-blocking operations for better concurrency
+
+* **Connection Pooling**: Efficient database connection management
+
+* **Caching**: Redis for frequently accessed data
+
+* **Background Tasks**: Async processing for heavy operations
+
+* **Resource Management**: Proper memory and CPU utilization
 
 ### Monitoring Metrics
-- **Response Time**: API endpoint performance
-- **Throughput**: Requests per second handling
-- **Error Rate**: Failed request percentage
-- **Resource Usage**: CPU, memory, and database utilization
-- **Queue Length**: Background task processing
+
+* **Response Time**: API endpoint performance
+
+* **Throughput**: Requests per second handling
+
+* **Error Rate**: Failed request percentage
+
+* **Resource Usage**: CPU, memory, and database utilization
+
+* **Queue Length**: Background task processing
 
 ## Security Requirements
 
 ### Authentication & Authorization
-- **JWT Tokens**: Secure token-based authentication
-- **Role-Based Access**: User permission management
-- **Token Refresh**: Secure token renewal mechanism
-- **Session Management**: Secure session handling
+
+* **JWT Tokens**: Secure token-based authentication
+
+* **Role-Based Access**: User permission management
+
+* **Token Refresh**: Secure token renewal mechanism
+
+* **Session Management**: Secure session handling
 
 ### Data Protection
-- **Input Validation**: Comprehensive request validation
-- **SQL Injection Prevention**: Parameterized queries
-- **File Upload Security**: Safe file handling
-- **Rate Limiting**: API abuse prevention
-- **CORS Configuration**: Cross-origin request security
+
+* **Input Validation**: Comprehensive request validation
+
+* **SQL Injection Prevention**: Parameterized queries
+
+* **File Upload Security**: Safe file handling
+
+* **Rate Limiting**: API abuse prevention
+
+* **CORS Configuration**: Cross-origin request security
 
 ## Deployment Configuration
 
 ### Environment Setup
+
 ```bash
 # Development
 export ENVIRONMENT=development
@@ -1041,6 +1102,7 @@ export SECRET_KEY=production-secret-key
 ```
 
 ### Docker Configuration
+
 ```dockerfile
 FROM python:3.11-slim
 
@@ -1059,6 +1121,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ## Monitoring & Logging
 
 ### Logging Configuration
+
 ```python
 import logging
 import sys
@@ -1078,6 +1141,7 @@ def setup_logging():
 ```
 
 ### Health Monitoring
+
 ```python
 @app.get("/health/detailed")
 async def detailed_health_check():
@@ -1107,6 +1171,6 @@ async def detailed_health_check():
     return health_status
 ```
 
----
+***
 
-*This backend architecture implementation guide provides the complete foundation for the Vectorless RAG system. Follow the structured approach and integration patterns for optimal performance and maintainability.*
+*This backend architecture implementation guide provides the complete foundation for the Vectorless RAG system. Follow the structured approach and integration patterns for optimal performance and maintainability.*

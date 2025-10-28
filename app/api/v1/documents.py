@@ -24,8 +24,9 @@ from app.models.document import (
 )
 from app.services.pdf_service import pdf_service
 from app.services.gemini_service import gemini_service
-from app.core.database import get_documents_collection
-from app.core.storage import upload_file, upload_file_data, download_file_data
+from app.services.tree_merger_service import tree_merger_service
+from app.core.database import get_documents_collection, get_tree_collection
+from app.core.storage import upload_file_data, download_file_data
 from app.core.exceptions import NotFoundError, ValidationError, ProcessingError
 from app.core.config import get_settings
 
@@ -145,7 +146,7 @@ async def process_document_background(document_id: str, file_content: bytes):
     """Background task for document processing."""
     try:
         logger.info("Starting background document processing", document_id=document_id)
-
+        start_time = datetime.utcnow()
         documents_collection = get_documents_collection()
 
         # Update status to processing
@@ -185,25 +186,24 @@ async def process_document_background(document_id: str, file_content: bytes):
             document_title=document.get("title", ""),
         )
 
-        # Update document with processing results
-        await documents_collection.update_one(
-            {"_id": document_id},
-            {
-                "$set": {
-                    "status": DocumentStatus.PROCESSED,
-                    "processing_completed": datetime.utcnow(),
-                    "processing_time": tree_analysis["processing_time"],
-                    "tree_data": tree_analysis["tree_data"],
-                    "analysis_metadata": tree_analysis,
-                }
-            },
-        )
+        # # Update document with processing results
+        # await documents_collection.update_one(
+        #     {"_id": document_id},
+        #     {
+        #         "$set": {
+        #             "status": DocumentStatus.PROCESSED,
+        #             "processing_completed": datetime.utcnow(),
+        #             "processing_time": tree_analysis["processing_time"],
+        #             "tree_data": tree_analysis["tree_data"],
+        #             "analysis_metadata": tree_analysis,
+        #         }
+        #     },
+        # )
 
         logger.info(
             "Document processing completed",
             document_id=document_id,
-            processing_time=tree_analysis["processing_time"],
-            image_count=len(image_paths),
+            processing_time=(datetime.utcnow() - start_time).total_seconds(),
         )
 
     except Exception as e:
@@ -540,6 +540,233 @@ async def download_document(document_id: str):
             "Failed to download document", document_id=document_id, error=str(e)
         )
         raise HTTPException(status_code=500, detail="Failed to download document")
+
+
+@router.post("/{document_id}/merge-tree")
+async def merge_document_tree(
+    document_id: str,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Merge page subtrees into a complete document tree using Pydantic AI.
+
+    This endpoint triggers the tree merging process that:
+    1. Fetches all page subtrees for the document
+    2. Uses Pydantic AI to generate JSON Patch operations for merging similar nodes
+    3. Executes the merge patches to create a unified tree structure
+    4. Saves the merged tree to MongoDB 'tree' collection
+
+    Args:
+        document_id: Document ID to merge subtrees for
+
+    Returns:
+        Tree merging status and metadata
+    """
+    try:
+        logger.info(
+            "Tree merging requested",
+            document_id=document_id,
+        )
+
+        # Convert string ID to ObjectId and validate document exists
+        try:
+            object_id = ObjectId(document_id)
+        except InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid document ID format")
+
+        documents_collection = get_documents_collection()
+        document = await documents_collection.find_one({"_id": object_id})
+
+        if not document:
+            raise NotFoundError(f"Document {document_id} not found")
+
+        # Check if document has been processed (has subtrees)
+        # if document.get("status") != DocumentStatus.PROCESSED:
+        #     raise HTTPException(
+        #         status_code=400,
+        #         detail="Document must be processed before tree merging. Current status: " + str(document.get("status"))
+        #     )
+
+        # Schedule background tree merging
+        background_tasks.add_task(merge_tree_background, document_id)
+
+        logger.info(
+            "Tree merging scheduled",
+            document_id=document_id,
+        )
+
+        return {
+            "document_id": document_id,
+            "status": "merging_scheduled",
+            "message": "Tree merging process started in background",
+        }
+
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Document not found")
+    except Exception as e:
+        logger.error(
+            "Failed to start tree merging", document_id=document_id, error=str(e)
+        )
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail="Failed to start tree merging")
+
+
+async def merge_tree_background(document_id: str):
+    """Background task for tree merging."""
+    try:
+        logger.info("Starting background tree merging", document_id=document_id)
+
+        documents_collection = get_documents_collection()
+
+        # Update document status to indicate tree merging in progress
+        await documents_collection.update_one(
+            {"_id": ObjectId(document_id)},
+            {
+                "$set": {
+                    "status": "in_progress",
+                    "updated_at": datetime.utcnow(),
+                }
+            },
+        )
+
+        # Execute tree merging
+        merge_result = await tree_merger_service.merge_document_tree(document_id)
+
+        # Update document with tree merging results
+        await documents_collection.update_one(
+            {"_id": ObjectId(document_id)},
+            {
+                "$set": {
+                    "status": "completed",
+                    "updated_at": datetime.utcnow(),
+                }
+            },
+        )
+
+        logger.info(
+            "Background tree merging completed",
+            document_id=document_id,
+        )
+
+    except Exception as e:
+        logger.error(
+            "Background tree merging failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
+        # Update document status to indicate failure
+        try:
+            await documents_collection.update_one(
+                {"_id": ObjectId(document_id)},
+                {
+                    "$set": {
+                        "status": "failed",
+                        "updated_at": datetime.utcnow(),
+                        "tree_merging_error": str(e),
+                    }
+                },
+            )
+        except Exception as update_error:
+            logger.error(
+                "Failed to update document with tree merging failure",
+                document_id=document_id,
+                error=str(update_error),
+            )
+
+
+@router.get("/{document_id}/tree")
+async def get_document_tree(document_id: str):
+    """
+    Get the merged document tree.
+
+    Args:
+        document_id: Document ID to get tree for
+
+    Returns:
+        Merged document tree structure
+    """
+    try:
+        from app.services.documents import get_document_tree_data
+
+        return await get_document_tree_data(document_id)
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Document tree not found")
+    except Exception as e:
+        logger.error(
+            "Failed to get document tree", document_id=document_id, error=str(e)
+        )
+        raise HTTPException(status_code=500, detail="Failed to get document tree")
+
+
+@router.get("/{document_id}/tree/path")
+async def get_document_tree_from_path(
+    document_id: str,
+    path: str = "/",
+    depth: int = Query(3, ge=1, le=10),
+    serialize: bool = False,
+):
+    """
+    Get a subtree starting from a specific path with depth control.
+
+    Args:
+        document_id: Document ID to get tree for
+        path: Path to the subtree (e.g., "/children/0/children/1" where "/" is root)
+        depth: Maximum depth of the subtree to return (1-10)
+
+    Returns:
+        Subtree structure starting from the specified path
+    """
+    try:
+        from app.services.documents import (
+            get_document_tree_from_path as service_get_tree_from_path,
+        )
+
+        return await service_get_tree_from_path(document_id, path, depth, serialize)
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Document tree not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(
+            "Failed to get document tree from path",
+            document_id=document_id,
+            path=path,
+            depth=depth,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to get document tree from path"
+        )
+
+
+@router.get("/{document_id}/tree/stats")
+async def get_document_tree_stats(document_id: str):
+    """
+    Get statistics about the document tree structure.
+
+    Args:
+        document_id: Document ID to get tree stats for
+
+    Returns:
+        Tree statistics including total nodes and counts by type (L1, L2, L3)
+    """
+    try:
+        from app.services.documents import (
+            get_document_tree_stats as service_get_tree_stats,
+        )
+
+        return await service_get_tree_stats(document_id)
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Document tree not found")
+    except Exception as e:
+        logger.error(
+            "Failed to get document tree stats",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(status_code=500, detail="Failed to get document tree stats")
 
 
 @router.get("/{document_id}/images")
