@@ -100,7 +100,10 @@ POST /api/v1/documents/upload
 Content-Type: multipart/form-data
 
 curl -X POST "http://localhost:8000/api/v1/documents/upload" \
-     -F "file=@document.pdf"
+     -F "file=@document.pdf" \
+     -F "title=My Document" \
+     -F "description=Document description" \
+     -F "user_id=user123"
 ```
 
 #### Get Document
@@ -112,78 +115,170 @@ curl "http://localhost:8000/api/v1/documents/doc123"
 
 #### List Documents
 ```bash
-GET /api/v1/documents/?status=completed&limit=10
+GET /api/v1/documents/?user_id=user123&status=PROCESSED&limit=10
 
-curl "http://localhost:8000/api/v1/documents/?status=completed"
+curl "http://localhost:8000/api/v1/documents/?status=PROCESSED&limit=10"
 ```
 
-### Tree Operations
-
-#### Generate Topic Tree
+#### Get Document Statistics
 ```bash
-POST /api/v1/trees/generate
-Content-Type: application/json
+GET /api/v1/documents/stats
 
-curl -X POST "http://localhost:8000/api/v1/trees/generate" \
-     -H "Content-Type: application/json" \
-     -d '{"document_id": "doc123", "regenerate": false}'
+curl "http://localhost:8000/api/v1/documents/stats"
 ```
 
-#### Apply JSON Patches
+#### Get Document Processing Status
 ```bash
-PATCH /api/v1/trees/{tree_id}
-Content-Type: application/json
+GET /api/v1/documents/{document_id}/status
 
-curl -X PATCH "http://localhost:8000/api/v1/trees/tree123" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "operations": [
-         {
-           "op": "replace",
-           "path": "/nodes/0/title",
-           "value": "Updated Title"
-         }
-       ]
-     }'
+curl "http://localhost:8000/api/v1/documents/doc123/status"
 ```
 
-#### Search Tree
+#### Update Document
 ```bash
-POST /api/v1/trees/{tree_id}/search
+PUT /api/v1/documents/{document_id}
 Content-Type: application/json
 
-curl -X POST "http://localhost:8000/api/v1/trees/tree123/search" \
+curl -X PUT "http://localhost:8000/api/v1/documents/doc123" \
      -H "Content-Type: application/json" \
-     -d '{"query": "introduction", "limit": 10}'
+     -d '{"title": "Updated Title", "description": "Updated description"}'
+```
+
+#### Delete Document
+```bash
+DELETE /api/v1/documents/{document_id}
+
+curl -X DELETE "http://localhost:8000/api/v1/documents/doc123"
+```
+
+#### Download Document
+```bash
+GET /api/v1/documents/{document_id}/download
+
+curl "http://localhost:8000/api/v1/documents/doc123/download" -o document.pdf
+```
+
+#### Merge Document Tree
+```bash
+POST /api/v1/documents/{document_id}/merge-tree
+
+curl -X POST "http://localhost:8000/api/v1/documents/doc123/merge-tree"
+```
+
+#### Get Document Tree
+```bash
+GET /api/v1/documents/{document_id}/tree
+
+curl "http://localhost:8000/api/v1/documents/doc123/tree"
+```
+
+#### Get Document Tree from Path
+```bash
+GET /api/v1/documents/{document_id}/tree/path?path=/&depth=3&serialize=false
+
+curl "http://localhost:8000/api/v1/documents/doc123/tree/path?path=/introduction&depth=2"
+```
+
+#### Get Document Tree Statistics
+```bash
+GET /api/v1/documents/{document_id}/tree/stats
+
+curl "http://localhost:8000/api/v1/documents/doc123/tree/stats"
+```
+
+#### List Document Images
+```bash
+GET /api/v1/documents/{document_id}/images
+
+curl "http://localhost:8000/api/v1/documents/doc123/images"
 ```
 
 ### Query Processing
 
-#### Execute Query
+#### Query Document (Streaming)
 ```bash
-POST /api/v1/queries/execute
+POST /api/v1/query/document/{document_id}
 Content-Type: application/json
 
-curl -X POST "http://localhost:8000/api/v1/queries/execute" \
+curl -X POST "http://localhost:8000/api/v1/query/document/doc123" \
      -H "Content-Type: application/json" \
      -d '{
        "query": "What is the main topic of this document?",
-       "scope": "document",
-       "document_ids": ["doc123"]
+       "user_id": "user123"
+     }' \
+     --no-buffer
+```
+
+### User Management
+
+#### Create User
+```bash
+POST /api/v1/users/
+Content-Type: application/json
+
+curl -X POST "http://localhost:8000/api/v1/users/" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "email": "user@example.com",
+       "username": "johndoe",
+       "full_name": "John Doe",
+       "password": "securepassword"
      }'
 ```
 
-#### Get Query Suggestions
+#### Get User Statistics
 ```bash
-POST /api/v1/queries/suggestions
+GET /api/v1/users/stats
+
+curl "http://localhost:8000/api/v1/users/stats"
+```
+
+#### Get User
+```bash
+GET /api/v1/users/{user_id}
+
+curl "http://localhost:8000/api/v1/users/user123"
+```
+
+#### List Users
+```bash
+GET /api/v1/users/?is_active=true&skip=0&limit=50
+
+curl "http://localhost:8000/api/v1/users/?is_active=true&limit=10"
+```
+
+#### Update User
+```bash
+PUT /api/v1/users/{user_id}
 Content-Type: application/json
 
-curl -X POST "http://localhost:8000/api/v1/queries/suggestions" \
+curl -X PUT "http://localhost:8000/api/v1/users/user123" \
      -H "Content-Type: application/json" \
      -d '{
-       "context_type": "document",
-       "document_ids": ["doc123"]
+       "full_name": "John Smith",
+       "is_active": true
      }'
+```
+
+#### Delete User
+```bash
+DELETE /api/v1/users/{user_id}
+
+curl -X DELETE "http://localhost:8000/api/v1/users/user123"
+```
+
+#### User Login
+```bash
+POST /api/v1/users/{user_id}/login
+
+curl -X POST "http://localhost:8000/api/v1/users/user123/login"
+```
+
+#### Get User Activity
+```bash
+GET /api/v1/users/{user_id}/activity?days=30
+
+curl "http://localhost:8000/api/v1/users/user123/activity?days=7"
 ```
 
 ## 🔧 Configuration
