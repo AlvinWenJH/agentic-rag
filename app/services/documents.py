@@ -5,8 +5,10 @@ Contains business logic for document tree operations that can be reused across d
 
 from typing import Dict, Any, Optional, List, Union
 import structlog
+import asyncio
 from app.core.database import get_tree_collection
 from app.core.exceptions import NotFoundError
+from app.core.storage import get_page_image
 
 logger = structlog.get_logger()
 
@@ -305,3 +307,94 @@ async def get_document_tree_from_path(
             error=str(e),
         )
         raise
+
+
+async def get_document_page(document_id: str, pages: List[int]) -> Dict[str, Optional[str]]:
+    """
+    Get multiple document pages as base64 encoded images.
+    
+    Args:
+        document_id: The document ID
+        pages: List of page numbers to retrieve
+        
+    Returns:
+        Dictionary mapping page keys to base64 encoded image data
+    """
+    try:
+        logger.info(
+            "Retrieving document pages",
+            document_id=document_id,
+            page_count=len(pages),
+            pages=pages,
+        )
+        
+        s3_bucket = "images"
+        pages_base64 = {}
+        
+        # Create tasks for concurrent downloads
+        async def fetch_page(page_number: int) -> tuple[str, Optional[str]]:
+            """Fetch a single page and return (page_key, base64_data)"""
+            # Format page number with 4 digits (0001, 0002, etc.)
+            formatted_page = f"{page_number:04d}"
+            s3_key = f"{document_id}/page_{formatted_page}.png"
+            page_key = f"Page_{formatted_page}"
+            
+            try:
+                page_base64 = await get_page_image(s3_bucket, s3_key)
+                logger.debug(
+                    "Page retrieved successfully",
+                    document_id=document_id,
+                    page_number=page_number,
+                    s3_key=s3_key,
+                    success=page_base64 is not None,
+                )
+                return page_key, page_base64
+            except Exception as e:
+                logger.error(
+                    "Failed to retrieve page",
+                    document_id=document_id,
+                    page_number=page_number,
+                    s3_key=s3_key,
+                    error=str(e),
+                )
+                return page_key, None
+        
+        # Execute all page fetches concurrently
+        tasks = [fetch_page(page_number) for page_number in pages]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        successful_pages = 0
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(
+                    "Page fetch task failed",
+                    document_id=document_id,
+                    error=str(result),
+                )
+                continue
+                
+            page_key, page_base64 = result
+            pages_base64[page_key] = page_base64
+            if page_base64 is not None:
+                successful_pages += 1
+        
+        logger.info(
+            "Document pages retrieval completed",
+            document_id=document_id,
+            total_pages=len(pages),
+            successful_pages=successful_pages,
+            failed_pages=len(pages) - successful_pages,
+        )
+        
+        return pages_base64
+        
+    except Exception as e:
+        logger.error(
+            "Failed to retrieve document pages",
+            document_id=document_id,
+            pages=pages,
+            error=str(e),
+        )
+        # Return empty dict with None values for all requested pages
+        return {f"Page_{page_number:04d}": None for page_number in pages}

@@ -8,6 +8,7 @@ from minio import Minio
 from minio.error import S3Error, InvalidResponseError
 import asyncio
 from functools import partial
+import base64
 
 from app.core.config import get_settings
 from app.core.exceptions import StorageError, ConfigurationError
@@ -256,3 +257,40 @@ async def file_exists(bucket: str, object_name: str) -> bool:
             error=str(e),
         )
         raise StorageError(f"Error checking file existence: {str(e)}")
+
+
+async def get_page_image(bucket: str, object_name: str) -> Optional[str]:
+    """Get image from MinIO and return base64 encoded string."""
+    try:
+        # Download the image data
+        logger.info(f"Fetching document page at {bucket} and path {object_name}")
+        image_data = await download_file_data(bucket, object_name)
+
+        # Encode to base64
+        base64_encoded = base64.b64encode(image_data).decode("utf-8")
+
+        logger.info(
+            "Image retrieved and encoded successfully",
+            bucket=bucket,
+            object_name=object_name,
+            size=len(image_data),
+        )
+
+        return base64_encoded
+
+    except StorageError as e:
+        logger.error(
+            "Failed to retrieve page image",
+            bucket=bucket,
+            object_name=object_name,
+            error=str(e),
+        )
+        return None
+    except Exception as e:
+        logger.error(
+            "Unexpected error retrieving page image",
+            bucket=bucket,
+            object_name=object_name,
+            error=str(e),
+        )
+        return None
