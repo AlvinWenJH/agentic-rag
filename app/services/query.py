@@ -17,14 +17,17 @@ from pydantic_ai import (
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 
-from app.services.documents import get_document_tree_from_path, get_document_page
+from app.services.documents import (
+    get_document_tree_from_path,
+    get_document_page,
+    get_document_visual_elements,
+)
 from app.core.database import get_documents_collection
 from app.core.exceptions import NotFoundError
 
 import mlflow
 import os
 import base64
-from httpx import AsyncClient
 
 # mlflow.pydantic_ai.autolog()
 
@@ -105,6 +108,98 @@ class QueryService:
                 JSON string containing image information for the requested pages
             """
             return await self._fetch_page_details(ctx, pages)
+
+        @self.agent.tool
+        async def fetch_document_visual_elements(
+            ctx: RunContext[QueryDependencies],
+            limit: int = 10,
+            skip: int = 0,
+            keyword: str = "",
+        ) -> ToolReturn:
+            """
+            Fetch document's charts, tables, diagrams, signatures, etc.
+
+            Args:
+                limit: Maximum number of visual elements to return (default: 10)
+                skip: Number of visual elements to skip for pagination (default: 0)
+                keyword: Optional keyword to filter visual elements by title or summary
+
+            Returns:
+                ToolReturn containing filtered visual elements with metadata
+            """
+            try:
+                # Get all visual elements for the document
+                all_visual_elements = await get_document_visual_elements(
+                    ctx.deps.document_id
+                )
+
+                # Filter by keyword if provided
+                filtered_elements = all_visual_elements
+                if keyword.strip():
+                    keyword_lower = keyword.lower().strip()
+                    filtered_elements = [
+                        element
+                        for element in all_visual_elements
+                        if (
+                            keyword_lower in element.get("title", "").lower()
+                            or keyword_lower in element.get("summary", "").lower()
+                            or keyword_lower in element.get("element", "").lower()
+                        )
+                    ]
+
+                # Apply pagination
+                total_count = len(filtered_elements)
+                paginated_elements = filtered_elements[skip : skip + limit]
+
+                # Track tool usage
+                ctx.deps.tool_usage["fetch_document_visual_elements"] = {
+                    "keyword": keyword,
+                    "total_found": total_count,
+                    "returned": len(paginated_elements),
+                    "skip": skip,
+                    "limit": limit,
+                }
+
+                logger.info(
+                    "Fetched document visual elements",
+                    document_id=ctx.deps.document_id,
+                    keyword=keyword,
+                    total_found=total_count,
+                    returned=len(paginated_elements),
+                )
+
+                return ToolReturn(
+                    return_value={
+                        "visual_elements": paginated_elements,
+                        "total_count": total_count,
+                        "returned_count": len(paginated_elements),
+                    },
+                )
+
+            except NotFoundError:
+                logger.warning(
+                    "Document visual elements not found",
+                    document_id=ctx.deps.document_id,
+                )
+                return ToolReturn(
+                    data={
+                        "visual_elements": [],
+                        "total_count": 0,
+                        "error": "Document not found",
+                    },
+                    text="No visual elements found - document may not exist or have no visual content.",
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to fetch document visual elements",
+                    document_id=ctx.deps.document_id,
+                    keyword=keyword,
+                    error=str(e),
+                )
+                return ToolReturn(
+                    data={"visual_elements": [], "total_count": 0, "error": str(e)},
+                    text=f"Failed to fetch visual elements: {str(e)}",
+                )
 
     async def _get_subtree_by_paths(
         self,

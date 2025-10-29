@@ -6,8 +6,8 @@ Contains business logic for document tree operations that can be reused across d
 from typing import Dict, Any, Optional, List, Union
 import structlog
 import asyncio
-from app.core.database import get_tree_collection
-from app.core.exceptions import NotFoundError
+from app.core.database import get_tree_collection, get_subtrees_collection
+from app.core.exceptions import NotFoundError, ProcessingError
 from app.core.storage import get_page_image
 
 logger = structlog.get_logger()
@@ -309,14 +309,16 @@ async def get_document_tree_from_path(
         raise
 
 
-async def get_document_page(document_id: str, pages: List[int]) -> Dict[str, Optional[str]]:
+async def get_document_page(
+    document_id: str, pages: List[int]
+) -> Dict[str, Optional[str]]:
     """
     Get multiple document pages as base64 encoded images.
-    
+
     Args:
         document_id: The document ID
         pages: List of page numbers to retrieve
-        
+
     Returns:
         Dictionary mapping page keys to base64 encoded image data
     """
@@ -327,10 +329,10 @@ async def get_document_page(document_id: str, pages: List[int]) -> Dict[str, Opt
             page_count=len(pages),
             pages=pages,
         )
-        
+
         s3_bucket = "images"
         pages_base64 = {}
-        
+
         # Create tasks for concurrent downloads
         async def fetch_page(page_number: int) -> tuple[str, Optional[str]]:
             """Fetch a single page and return (page_key, base64_data)"""
@@ -338,7 +340,7 @@ async def get_document_page(document_id: str, pages: List[int]) -> Dict[str, Opt
             formatted_page = f"{page_number:04d}"
             s3_key = f"{document_id}/page_{formatted_page}.png"
             page_key = f"Page_{formatted_page}"
-            
+
             try:
                 page_base64 = await get_page_image(s3_bucket, s3_key)
                 logger.debug(
@@ -358,11 +360,11 @@ async def get_document_page(document_id: str, pages: List[int]) -> Dict[str, Opt
                     error=str(e),
                 )
                 return page_key, None
-        
+
         # Execute all page fetches concurrently
         tasks = [fetch_page(page_number) for page_number in pages]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         # Process results
         successful_pages = 0
         for result in results:
@@ -373,12 +375,12 @@ async def get_document_page(document_id: str, pages: List[int]) -> Dict[str, Opt
                     error=str(result),
                 )
                 continue
-                
+
             page_key, page_base64 = result
             pages_base64[page_key] = page_base64
             if page_base64 is not None:
                 successful_pages += 1
-        
+
         logger.info(
             "Document pages retrieval completed",
             document_id=document_id,
@@ -386,9 +388,9 @@ async def get_document_page(document_id: str, pages: List[int]) -> Dict[str, Opt
             successful_pages=successful_pages,
             failed_pages=len(pages) - successful_pages,
         )
-        
+
         return pages_base64
-        
+
     except Exception as e:
         logger.error(
             "Failed to retrieve document pages",
@@ -398,3 +400,85 @@ async def get_document_page(document_id: str, pages: List[int]) -> Dict[str, Opt
         )
         # Return empty dict with None values for all requested pages
         return {f"Page_{page_number:04d}": None for page_number in pages}
+
+
+async def get_document_visual_elements(
+    document_id: str,
+) -> List[Dict[str, Optional[str]]]:
+    """
+    Retrieve all visual elements for a document from all its pages.
+    
+    Args:
+        document_id: The document ID to retrieve visual elements for
+        
+    Returns:
+        List of dictionaries containing visual elements with keys:
+        - element: Type of visual element (e.g., image, table)
+        - title: Clear, descriptive title
+        - summary: Brief content summary
+        - page_number: Page number where the element is found
+        
+    Raises:
+        NotFoundError: If no subtrees found for the document
+    """
+    try:
+        logger.info(
+            "Retrieving visual elements for document",
+            document_id=document_id,
+        )
+        
+        # Get subtrees collection
+        subtrees_collection = get_subtrees_collection()
+        
+        # Query all subtrees for the document, sorted by page number
+        cursor = subtrees_collection.find(
+            {"document_id": document_id}
+        ).sort("page_number", 1)
+        
+        subtrees = await cursor.to_list(length=None)
+        
+        if not subtrees:
+            logger.warning(
+                "No subtrees found for document",
+                document_id=document_id,
+            )
+            raise NotFoundError(f"No visual elements found for document {document_id}")
+        
+        # Extract visual elements from all pages
+        visual_elements = []
+        total_elements = 0
+        
+        for subtree in subtrees:
+            page_number = subtree.get("page_number")
+            page_visual_elements = subtree.get("visual_elements", [])
+            
+            # Add page_number to each visual element
+            for element in page_visual_elements:
+                visual_element = {
+                    "element": element.get("element"),
+                    "title": element.get("title"),
+                    "summary": element.get("summary"),
+                    "page_number": page_number
+                }
+                visual_elements.append(visual_element)
+                total_elements += 1
+        
+        logger.info(
+            "Visual elements retrieval completed",
+            document_id=document_id,
+            total_pages=len(subtrees),
+            total_elements=total_elements,
+        )
+        
+        return visual_elements
+        
+    except NotFoundError:
+        # Re-raise NotFoundError as-is
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to retrieve visual elements",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise ProcessingError(f"Failed to retrieve visual elements: {str(e)}")

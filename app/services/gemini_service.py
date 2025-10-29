@@ -34,7 +34,7 @@ logger = structlog.get_logger()
 class VisualElement(BaseModel):
     """Visual element detected on a page."""
 
-    type: str = Field(description="Type of visual element (e.g., image, table)")
+    element: str = Field(description="Type of visual element (e.g., image, table)")
     title: str = Field(description="Clear, descriptive title")
     summary: str = Field(description="Brief content summary")
 
@@ -73,7 +73,7 @@ class PageAnalysisResult(BaseModel):
     page_tree: List[Section] = Field(
         description="Hierarchical tree structure with Sections as root nodes containing Subjects and Topics",
     )
-    # visual_elements: List[VisualElement] = Field(description="Visual elements detected")
+    visual_elements: List[VisualElement] = Field(description="Visual elements detected")
 
 
 class GeminiVisualAnalyzer:
@@ -104,6 +104,7 @@ class GeminiVisualAnalyzer:
         document_id: str,
         page_number: int,
         page_tree: List[Section],
+        visual_elements: List[VisualElement],
         image_path: str,
         token_usage: Dict[str, int],
     ) -> str:
@@ -124,12 +125,14 @@ class GeminiVisualAnalyzer:
 
             # Convert page_tree to dict format for MongoDB storage
             page_tree_dict = [section.model_dump() for section in page_tree]
+            elements = [ve.model_dump() for ve in visual_elements]
 
             # Create document structure for MongoDB
             subtree_document = {
                 "document_id": document_id,
                 "page_number": page_number,
                 "page_tree": page_tree_dict,
+                "visual_elements": elements,
                 "image_path": image_path,
                 "created_at": datetime.utcnow(),
                 "processing_metadata": {
@@ -372,6 +375,7 @@ class GeminiVisualAnalyzer:
                         document_id=document_id,
                         page_number=page_number,
                         page_tree=page_result.page_tree,
+                        visual_elements=page_result.visual_elements,
                         image_path=image_path,
                         token_usage=usage,
                     )

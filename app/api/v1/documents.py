@@ -25,7 +25,7 @@ from app.models.document import (
 from app.services.pdf_service import pdf_service
 from app.services.gemini_service import gemini_service
 from app.services.tree_merger_service import tree_merger_service
-from app.core.database import get_documents_collection, get_tree_collection
+from app.core.database import get_documents_collection
 from app.core.storage import upload_file_data, download_file_data
 from app.core.exceptions import NotFoundError, ValidationError, ProcessingError
 from app.core.config import get_settings
@@ -769,34 +769,38 @@ async def get_document_tree_stats(document_id: str):
         raise HTTPException(status_code=500, detail="Failed to get document tree stats")
 
 
-@router.get("/{document_id}/images")
-async def list_document_images(document_id: str):
-    """List document page images."""
+@router.get("/{document_id}/visual_elements")
+async def list_document_visual_elements(document_id: str):
+    """
+    List document page visual elements (like charts, tables, flowchart, diagrams, etc).
+
+    Args:
+        document_id: Document ID to retrieve visual elements for
+
+    Returns:
+        List of visual elements with element type, title, summary, and page number
+    """
     try:
-        # Convert string ID to ObjectId
-        try:
-            object_id = ObjectId(document_id)
-        except InvalidId:
-            raise HTTPException(status_code=400, detail="Invalid document ID format")
+        from app.services.documents import get_document_visual_elements
 
-        documents_collection = get_documents_collection()
-        document = await documents_collection.find_one({"_id": object_id})
-
-        if not document:
-            raise NotFoundError(f"Document {document_id} not found")
-
-        image_paths = document.get("image_paths", [])
+        visual_elements = await get_document_visual_elements(document_id)
 
         return {
             "document_id": document_id,
-            "image_count": len(image_paths),
-            "image_paths": image_paths,
+            "visual_elements": visual_elements,
+            "total_elements": len(visual_elements),
         }
 
     except NotFoundError:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(
+            status_code=404, detail="Document visual elements not found"
+        )
     except Exception as e:
         logger.error(
-            "Failed to list document images", document_id=document_id, error=str(e)
+            "Failed to list document visual elements",
+            document_id=document_id,
+            error=str(e),
         )
-        raise HTTPException(status_code=500, detail="Failed to list document images")
+        raise HTTPException(
+            status_code=500, detail="Failed to list document visual elements"
+        )
