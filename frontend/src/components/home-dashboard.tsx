@@ -2,88 +2,16 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { FileText, Folder, MessageSquare } from "lucide-react"
+import { FileText, Folder, MessageSquare, CircleCheckBig, Clock, Upload, XCircle } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Button } from "@/components/ui/button"
+import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyMedia, EmptyContent } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getBackendUrl } from "@/lib/env"
 
-type Metric = { label: string; value: number | string }
-
-function toNumberOrZero(val: unknown): number {
-    const num = typeof val === "number" ? val : Number(val)
-    return Number.isFinite(num) ? num : 0
-}
-
-function bytesToMB(bytes: unknown, digits = 2): string {
-    const num = toNumberOrZero(bytes)
-    const mb = num / (1024 * 1024)
-    return mb.toFixed(digits)
-}
-
-function extractDocumentMetrics(data: any): Metric[] {
-    // Matches the provided /documents/stats response shape
-    const totalDocs = toNumberOrZero(data?.total_documents)
-    const completed = toNumberOrZero(data?.documents_by_status?.completed)
-    const storageMB = bytesToMB(data?.total_file_size)
-    return [
-        { label: "Total Documents", value: totalDocs },
-        { label: "Completed", value: completed },
-        { label: "Storage (MB)", value: storageMB },
-    ]
-}
-
-function extractCollectionMetrics(data: any): Metric[] {
-    return [
-        { label: "Collections", value: toNumberOrZero(data?.collections ?? data?.count ?? data?.total) },
-        { label: "Documents Linked", value: toNumberOrZero(data?.documents_linked ?? data?.documents ?? data?.docs ?? data?.items) },
-        { label: "Concepts", value: toNumberOrZero(data?.concepts ?? data?.tags ?? data?.nodes) },
-    ]
-}
-
-function extractChatMetrics(data: any): Metric[] {
-    return [
-        { label: "Conversations", value: toNumberOrZero(data?.conversations ?? data?.count ?? data?.total) },
-        { label: "Messages", value: toNumberOrZero(data?.messages ?? data?.msgs) },
-        { label: "Avg Response (ms)", value: toNumberOrZero(data?.avg_response_time_ms ?? data?.avg_ms) },
-    ]
-}
-
 export default function HomeDashboard() {
-    const [loading, setLoading] = React.useState({ documents: true, collections: true, chat: true })
-    const [docsStats, setDocsStats] = React.useState<any>({})
-    const [collectionsStats, setCollectionsStats] = React.useState<any>({})
-    const [chatStats, setChatStats] = React.useState<any>({})
-
-    React.useEffect(() => {
-        const backendUrl = getBackendUrl()
-
-        async function fetchStats(kind: "documents" | "collections" | "chat") {
-            try {
-                const res = await fetch(`${backendUrl}/api/v1/${kind}/stats`, {
-                    headers: { accept: "application/json" },
-                })
-                if (!res.ok) throw new Error(String(res.status))
-                const data = await res.json().catch(() => ({}))
-                if (kind === "documents") setDocsStats(data)
-                if (kind === "collections") setCollectionsStats(data)
-                if (kind === "chat") setChatStats(data)
-            } catch {
-                // Fallback to zeros by leaving stats as empty objects
-            } finally {
-                setLoading((prev) => ({ ...prev, [kind]: false }))
-            }
-        }
-
-        fetchStats("documents")
-        fetchStats("collections")
-        fetchStats("chat")
-    }, [])
-
-    const docMetrics = extractDocumentMetrics(docsStats)
-    const colMetrics = extractCollectionMetrics(collectionsStats)
-    const chatMetrics = extractChatMetrics(chatStats)
 
     return (
         <div className="flex flex-1 flex-col gap-6">
@@ -111,25 +39,26 @@ export default function HomeDashboard() {
 
             <Separator className="my-2" />
 
-            {/* Metrics overview cards */}
+            {/* Recent sections (empty state until backend is ready) */}
             <div className="grid gap-4 sm:grid-cols-2">
-                <MetricCard
-                    title="Documents Overview"
-                    description="Stay on top of your uploaded files."
-                    loading={loading.documents}
-                    metrics={docMetrics}
+                <RecentDocumentsCard />
+                <RecentEmptyCard
+                    title="Recent Collections"
+                    description="Your most recently created or updated collections"
+                    ctaLabel="Create Collection"
+                    href="/collection"
+                    icon={<Folder className="size-6" />}
+                    emptyTitle="No collections"
+                    emptyDescription="Get started by creating your first collection."
                 />
-                <MetricCard
-                    title="Collections Overview"
-                    description="Structure documents into reusable sets."
-                    loading={loading.collections}
-                    metrics={colMetrics}
-                />
-                <MetricCard
-                    title="Chat Overview"
-                    description="Recent activity and responsiveness."
-                    loading={loading.chat}
-                    metrics={chatMetrics}
+                <RecentEmptyCard
+                    title="Recent Conversations"
+                    description="Your most recent chat sessions"
+                    ctaLabel="Start Chat"
+                    href="/query"
+                    icon={<MessageSquare className="size-6" />}
+                    emptyTitle="No conversations"
+                    emptyDescription="Get started by starting your first chat."
                 />
             </div>
         </div>
@@ -167,16 +96,22 @@ function TopCard({
     )
 }
 
-function MetricCard({
+function RecentEmptyCard({
     title,
     description,
-    loading,
-    metrics,
+    href,
+    ctaLabel,
+    icon,
+    emptyTitle,
+    emptyDescription,
 }: {
     title: string
     description: string
-    loading: boolean
-    metrics: Metric[]
+    href: string
+    ctaLabel: string
+    icon: React.ReactNode
+    emptyTitle: string
+    emptyDescription: string
 }) {
     return (
         <Card>
@@ -185,29 +120,153 @@ function MetricCard({
                 <CardDescription>{description}</CardDescription>
             </CardHeader>
             <CardContent>
+                <Empty>
+                    <EmptyHeader>
+                        <EmptyMedia variant="icon">{icon}</EmptyMedia>
+                        <EmptyTitle>{emptyTitle}</EmptyTitle>
+                        <EmptyDescription>{emptyDescription}</EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent>
+                        <Link href={href} prefetch>
+                            <Button>
+                                {ctaLabel}
+                            </Button>
+                        </Link>
+                    </EmptyContent>
+                </Empty>
+            </CardContent>
+        </Card>
+    )
+}
+
+function RecentDocumentsCard() {
+    const [loading, setLoading] = React.useState(true)
+    const [items, setItems] = React.useState<any[]>([])
+    React.useEffect(() => {
+        const backendUrl = getBackendUrl()
+        async function fetchDocs() {
+            try {
+                const res = await fetch(`${backendUrl}/api/v1/documents/?skip=0&limit=4`, {
+                    headers: { accept: "application/json" },
+                })
+                if (!res.ok) throw new Error(String(res.status))
+                const data = await res.json().catch(() => ({}))
+                setItems(Array.isArray(data?.documents) ? data.documents : [])
+            } catch (_) {
+                setItems([])
+            } finally {
+                setLoading(false)
+            }
+        }
+        fetchDocs()
+    }, [])
+
+    const hasItems = items.length > 0
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Recent Documents</CardTitle>
+                <CardDescription>Your most recently uploaded or updated documents</CardDescription>
+            </CardHeader>
+            <CardContent>
                 {loading ? (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {(metrics.length ? Array(metrics.length).fill(0) : Array(3).fill(0)).map((_, i) => (
-                            <Skeleton key={i} className="h-16 w-full" />
+                    <div className="flex flex-col gap-4">
+                        {Array(3).fill(0).map((_, i) => (
+                            <Skeleton key={i} className="h-6 w-full" />
+                        ))}
+                    </div>
+                ) : hasItems ? (
+                    <div className="flex flex-col gap-4">
+                        {items.map((doc) => (
+                            <Button key={doc.id} variant="outline" className="flex w-full items-center justify-between gap-3 py-6">
+                                <span className="flex min-w-0 items-center gap-3">
+                                    <FileText className="size-5 shrink-0 text-muted-foreground" />
+                                    <span className="min-w-0 flex flex-col items-start text-left">
+                                        <span className="truncate">{doc?.filename ?? doc?.title ?? doc?.id}</span>
+                                        <span className="mt-1 text-xs leading-snug text-muted-foreground">{formatTimeAgo(doc?.updated_at)}</span>
+                                    </span>
+                                </span>
+                                <span className="ml-auto flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs capitalize">
+                                    <StatusIcon status={doc?.status} />
+                                    {doc?.status ?? "unknown"}
+                                </span>
+                            </Button>
                         ))}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {metrics.map((m) => (
-                            <StatTile key={m.label} label={m.label} value={m.value} />
-                        ))}
-                    </div>
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon"><FileText className="size-6" /></EmptyMedia>
+                            <EmptyTitle>No documents</EmptyTitle>
+                            <EmptyDescription>Get started by uploading your first document.</EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
+                            <Link href="/documents" prefetch>
+                                <Button>Upload Document</Button>
+                            </Link>
+                        </EmptyContent>
+                    </Empty>
                 )}
             </CardContent>
         </Card>
     )
 }
 
-function StatTile({ label, value }: { label: string; value: number | string }) {
-    return (
-        <div className="rounded-lg border bg-muted/40 p-4">
-            <div className="text-sm text-muted-foreground">{label}</div>
-            <div className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">{value}</div>
-        </div>
-    )
+function StatusIcon({ status }: { status?: string }) {
+    const s = (status ?? "").toLowerCase()
+    let color = "text-muted-foreground"
+    let Icon: React.ComponentType<React.ComponentProps<"svg">> = FileText
+
+    switch (s) {
+        case "completed":
+            Icon = CircleCheckBig
+            color = "text-green-600"
+            break
+        case "processing":
+        case "in_progress":
+            Icon = Clock
+            color = "text-amber-600"
+            break
+        case "uploaded":
+            Icon = Upload
+            color = "text-blue-600"
+            break
+        case "failed":
+        case "error":
+            Icon = XCircle
+            color = "text-red-600"
+            break
+    }
+    return <Icon className={`size-4 ${color}`} />
+}
+
+function formatTimeAgo(value?: string) {
+    if (!value) return "—"
+    // Normalize fractional seconds to at most 3 digits for Date parsing
+    const normalized = value.replace(/(\.\d{3})\d+$/, "$1").replace(/\.\d+$/, (m) => (m.length > 4 ? m.slice(0, 4) : m))
+    const tryDate = (s: string) => {
+        const d = new Date(s)
+        return isNaN(d.getTime()) ? undefined : d
+    }
+    const d = tryDate(normalized) ?? tryDate(value.replace(/\.\d+$/, ""))
+    if (!d) return value
+
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    const absMs = Math.abs(diffMs)
+
+    const minutes = Math.floor(absMs / (60 * 1000))
+    const hours = Math.floor(absMs / (60 * 60 * 1000))
+    const days = Math.floor(absMs / (24 * 60 * 60 * 1000))
+    const months = Math.floor(absMs / (30 * 24 * 60 * 60 * 1000))
+    const years = Math.floor(absMs / (365 * 24 * 60 * 60 * 1000))
+
+    const suffix = diffMs >= 0 ? "ago" : "from now"
+    if (minutes < 1) return `just now`
+    if (minutes < 60) return `${minutes} ${minutes === 1 ? "min" : "mins"} ${suffix}`
+    if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ${suffix}`
+    if (days < 30) return `${days} ${days === 1 ? "day" : "days"} ${suffix}`
+    if (months < 12) return `${months} ${months === 1 ? "month" : "months"} ${suffix}`
+    return `${years} ${years === 1 ? "year" : "years"} ${suffix}`
 }
