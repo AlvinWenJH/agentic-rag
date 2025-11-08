@@ -27,6 +27,11 @@ class UserBase(BaseModel):
     is_active: bool = True
 
 
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     username: str
@@ -123,6 +128,37 @@ async def create_user(user_data: UserCreate):
     except Exception as e:
         logger.error("Failed to create user", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to create user")
+
+
+@router.post("/login", response_model=UserResponse)
+async def login_user(user_data: UserLogin):
+    """Login user and return user details."""
+    try:
+        logger.info("User login attempt", username=user_data.username)
+        users_collection = get_users_collection()
+
+        # Find user by username
+        user = await users_collection.find_one({"username": user_data.username})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        # Check password
+        if user["password_hash"] != "hashed_" + user_data.password:
+            raise HTTPException(status_code=401, detail="Incorrect password")
+        # Update last login time
+        await users_collection.update_one(
+            {"_id": user["_id"]}, {"$set": {"last_login": datetime.utcnow()}}
+        )
+        # Return user response
+        user["id"] = str(user["_id"])
+        del user["_id"]
+        del user["password_hash"]
+        return UserResponse(**user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to login user", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to login user")
 
 
 @router.get("/stats", response_model=UserStats)

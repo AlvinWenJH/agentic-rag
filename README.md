@@ -230,7 +230,6 @@ The AI agent has access to three powerful tools for comprehensive document analy
 - **Capabilities**:
   - Explore document sections by nodes' path
   - Retrieve structured summaries and page references
-  - Adaptive depth control (1-10 levels)
   - Path tracking for query journey analysis
 - **Use Cases**: Finding specific sections, understanding document organization, locating relevant content areas
 
