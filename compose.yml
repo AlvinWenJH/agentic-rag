@@ -156,6 +156,17 @@ services:
     restart: "no"
     <<: *basic-config 
 
+  frontend:
+    image: evangelist/frontend:latest
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3333:3000"
+    depends_on:
+      - backend
+    <<: *base-config
+
 volumes:
   mongodb_data:
     driver: local

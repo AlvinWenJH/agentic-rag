@@ -232,3 +232,7 @@ tramp
 # Local development
 local/
 dev/
+
+**/.next
+**/node_modules
+**/backup
