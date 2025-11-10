@@ -3,8 +3,9 @@
 import * as React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useSearchParams } from "next/navigation"
-import { FileText, HardDrive, CircleCheckBig, Download, GitBranch, LibraryBig } from "lucide-react"
+import { FileText, HardDrive, Files, ListTree, ZoomIn, ZoomOut, RefreshCcw, Download, GitBranch, LibraryBig } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -107,6 +108,17 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
   const [images, setImages] = useState<Record<number, string>>({})
   const containerRef = useRef<HTMLDivElement>(null)
   const batchSize = 10
+  const [containerMinHeight, setContainerMinHeight] = useState<number | undefined>(undefined)
+  const [previewPage, setPreviewPage] = useState<number | null>(null)
+  const [previewZoom, setPreviewZoom] = useState<number>(1.5)
+  const previewContainerRef = useRef<HTMLDivElement>(null)
+  const previewImgRef = useRef<HTMLImageElement>(null)
+  const [previewFitWidth, setPreviewFitWidth] = useState<number>(0)
+  const [previewPan, setPreviewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState<boolean>(false)
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null)
+  const dragPanStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const previewAspectRef = useRef<number | null>(null)
   const [selectedPage, setSelectedPage] = useState<number | null>(() => {
     const sp = searchParams?.get("page")
     const n = sp ? parseInt(sp, 10) : NaN
@@ -170,31 +182,91 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageCount])
 
-  function candidates(page: number) {
+  function imageUrl(page: number) {
     const base = `${backendUrl}/api/v1/documents/${resolvedId}`
-    return [
-      `${base}/pages/${page}/image`,
-      `${base}/image?page=${page}`,
-      `${base}/page/${page}/image`,
-    ]
+    // New API endpoint that returns JSON: { "page_base64": "..." }
+    return `${base}/page/${page}`
   }
 
   async function loadPageImage(page: number) {
-    for (const url of candidates(page)) {
-      try {
-        const res = await fetch(url, { headers: { accept: "image/png,image/jpeg" } })
-        if (!res.ok) continue
-        const blob = await res.blob()
-        const objUrl = URL.createObjectURL(blob)
-        setImages((prev) => ({ ...prev, [page]: objUrl }))
+    const url = imageUrl(page)
+    try {
+      const res = await fetch(url, { headers: { accept: "application/json" } })
+      if (!res.ok) throw new Error(`Failed to fetch page ${page}`)
+      const json = await res.json().catch(() => null)
+      const b64: string | undefined = json?.page_base64
+      if (!b64) {
+        setImages((prev) => ({ ...prev, [page]: "" }))
         return
-      } catch (_) {
-        // try next
       }
+      const src = b64.startsWith("data:image") ? b64 : `data:image/png;base64,${b64}`
+      setImages((prev) => ({ ...prev, [page]: src }))
+    } catch (_) {
+      // if failed, mark placeholder
+      setImages((prev) => ({ ...prev, [page]: "" }))
     }
-    // if all failed, mark placeholder
-    setImages((prev) => ({ ...prev, [page]: "" }))
   }
+
+  // Compute fit-to-viewport width for full-screen preview so 100% shows whole page without scrollbars
+  function recomputePreviewFit() {
+    try {
+      const cont = previewContainerRef.current
+      const imgEl = previewImgRef.current
+      if (!cont || !imgEl) return
+      const cw = cont.clientWidth
+      const ch = cont.clientHeight
+      const iw = imgEl.naturalWidth || imgEl.width
+      const ih = imgEl.naturalHeight || imgEl.height
+      if (!cw || !ch || !iw || !ih) return
+      const scale = Math.min(cw / iw, ch / ih)
+      const fitWidth = Math.floor(iw * scale)
+      setPreviewFitWidth(fitWidth)
+      previewAspectRef.current = ih / iw
+      // clamp pan based on new bounds
+      clampPan(previewPan.x, previewPan.y)
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  useEffect(() => {
+    if (previewPage !== null) {
+      // set default zoom to 150% when opening a page
+      setPreviewZoom(1.5)
+      setPreviewPan({ x: 0, y: 0 })
+      // slight delay to ensure DOM has measured sizes
+      const t = setTimeout(() => recomputePreviewFit(), 0)
+      const onResize = () => recomputePreviewFit()
+      window.addEventListener("resize", onResize)
+      return () => { clearTimeout(t); window.removeEventListener("resize", onResize) }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewPage])
+
+  // Helper: clamp pan to within the visible bounds
+  function clampPan(x: number, y: number) {
+    const cont = previewContainerRef.current
+    const ar = previewAspectRef.current ?? null
+    if (!cont || !ar || previewFitWidth <= 0) {
+      setPreviewPan({ x: 0, y: 0 })
+      return
+    }
+    const cw = cont.clientWidth
+    const ch = cont.clientHeight
+    const widthPx = Math.round(previewFitWidth * previewZoom)
+    const heightPx = Math.round(widthPx * ar)
+    const maxX = Math.max(0, Math.floor((widthPx - cw) / 2))
+    const maxY = Math.max(0, Math.floor((heightPx - ch) / 2))
+    const nx = Math.max(-maxX, Math.min(maxX, x))
+    const ny = Math.max(-maxY, Math.min(maxY, y))
+    setPreviewPan({ x: nx, y: ny })
+  }
+
+  // Re-clamp pan whenever zoom changes or fit width updates
+  useEffect(() => {
+    clampPan(previewPan.x, previewPan.y)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewZoom, previewFitWidth])
 
   async function loadBatch(start: number) {
     const end = Math.min(pageCount, start + batchSize - 1)
@@ -211,6 +283,21 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
     await Promise.all(pages.map((p) => loadPageImage(p)))
     setLoadedUntil(t)
   }
+
+  function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const img = e.currentTarget
+    // Use the rendered image height to ensure the scroll container
+    // can display at least one full page without cropping.
+    const h = img.clientHeight
+    if (h > 0) setContainerMinHeight(h + 16) // account for padding around the image
+  }
+
+  useEffect(() => {
+    if (previewPage) {
+      void ensureLoadedUpTo(previewPage)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewPage])
 
   function onScroll() {
     const el = containerRef.current
@@ -393,7 +480,7 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CircleCheckBig className="size-5 text-muted-foreground" /> Pages ({formatNumber(pageCount)})
+              <Files className="size-5 text-muted-foreground" /> Pages ({formatNumber(pageCount)})
             </CardTitle>
             <CardAction>
               <div className="flex items-center gap-2">
@@ -419,7 +506,8 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
             <div
               ref={containerRef}
               onScroll={onScroll}
-              className="max-h-[70vh] overflow-y-auto rounded border"
+              className="overflow-y-auto rounded max-h-screen"
+              style={{ minHeight: containerMinHeight ? `${containerMinHeight}px` : undefined }}
             >
               {loadedUntil === 0 && pageCount > 0 ? (
                 <div className="p-4">
@@ -431,12 +519,16 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
                     <div key={p} id={`page-${p}`} className="p-2">
                       {images[p] ? (
                         images[p].length ? (
-                          <img
-                            src={images[p]}
-                            alt={`Page ${p}`}
-                            className="w-full rounded border"
-                            loading="lazy"
-                          />
+                          <div className="flex w-full items-start justify-center">
+                            <img
+                              src={images[p]}
+                              alt={`Page ${p}`}
+                              className="block w-full h-auto object-contain rounded border cursor-zoom-in"
+                              loading="lazy"
+                              onLoad={onImageLoad}
+                              onClick={() => { setPreviewPage(p); setPreviewZoom(1) }}
+                            />
+                          </div>
                         ) : (
                           <div className="flex h-64 w-full items-center justify-center rounded border bg-muted text-muted-foreground">
                             Image unavailable for page {p}
@@ -456,30 +548,115 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
         {/* Right: tree */}
         <Card>
           <CardHeader>
-            <CardTitle>Document Tree</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <ListTree className="size-5 text-muted-foreground" /> Concept Tree
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {loadingTree ? (
-              <div className="flex flex-col gap-3">
-                {Array(3).fill(0).map((_, i) => (
-                  <Skeleton key={i} className="h-6 w-full" />
-                ))}
-              </div>
-            ) : selectedPage ? (
-              filteredTree ? (
-                <TreeNodeView node={filteredTree} depth={0} />
+            <div
+              className="overflow-y-auto rounded border max-h-screen"
+              style={{ minHeight: containerMinHeight ? `${containerMinHeight}px` : undefined }}
+            >
+              {loadingTree ? (
+                <div className="flex flex-col gap-3 p-2">
+                  {Array(3).fill(0).map((_, i) => (
+                    <Skeleton key={i} className="h-6 w-full" />
+                  ))}
+                </div>
+              ) : selectedPage ? (
+                filteredTree ? (
+                  <div className="p-2">
+                    <TreeNodeView node={filteredTree} depth={0} />
+                  </div>
+                ) : (
+                  <p className="p-2 text-sm text-muted-foreground">No nodes for page {selectedPage}</p>
+                )
+              ) : tree?.tree_data ? (
+                <div className="p-2">
+                  <TreeNodeView node={tree.tree_data} depth={0} />
+                </div>
+              ) : errorTree ? (
+                <p className="p-2 text-sm text-destructive">{errorTree}</p>
               ) : (
-                <p className="text-sm text-muted-foreground">No nodes for page {selectedPage}</p>
-              )
-            ) : tree?.tree_data ? (
-              <TreeNodeView node={tree.tree_data} depth={0} />
-            ) : errorTree ? (
-              <p className="text-sm text-destructive">{errorTree}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground">No tree available</p>
-            )}
+                <p className="p-2 text-sm text-muted-foreground">No tree available</p>
+              )}
+            </div>
           </CardContent>
         </Card>
+
+        {/* Full-screen page preview */}
+        <Dialog open={previewPage !== null} onOpenChange={(o) => { if (!o) setPreviewPage(null) }}>
+          <DialogContent className="w-[96vw] max-w-[96vw] h-[95vh] p-0 overflow-hidden flex flex-col">
+            <DialogHeader className="relative border-b p-3">
+              <DialogTitle className="w-full text-center">Page {previewPage ?? ""}</DialogTitle>
+            </DialogHeader>
+            <div className="relative h-[calc(95vh-48px)] bg-background">
+              <div className="absolute inset-x-0 top-3 z-10 px-3">
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="px-2 py-1 rounded border bg-background text-xs font-mono tabular-nums">
+                    {Math.round(previewZoom * 100)}%
+                  </span>
+                  <Button size="icon" variant="secondary" onClick={() => setPreviewZoom((z) => Math.max(1, Number((z - 0.1).toFixed(2))))}>
+                    <ZoomOut />
+                  </Button>
+                  <Button size="icon" variant="secondary" onClick={() => setPreviewZoom((z) => Math.min(5, Number((z + 0.1).toFixed(2))))}>
+                    <ZoomIn />
+                  </Button>
+                  <Button size="icon" variant="secondary" onClick={() => { setPreviewZoom(1); setPreviewPan({ x: 0, y: 0 }) }}>
+                    <RefreshCcw />
+                  </Button>
+                </div>
+              </div>
+              <div
+                ref={previewContainerRef}
+                className={`flex h-full w-full items-center justify-center overflow-hidden p-2 ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+                onPointerDown={(e) => {
+                  if (!previewPage) return
+                  setIsDragging(true)
+                  dragStartRef.current = { x: e.clientX, y: e.clientY }
+                  dragPanStartRef.current = { ...previewPan }
+                    ; (e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+                }}
+                onPointerMove={(e) => {
+                  if (!isDragging || !dragStartRef.current) return
+                  const dx = e.clientX - dragStartRef.current.x
+                  const dy = e.clientY - dragStartRef.current.y
+                  const nx = dragPanStartRef.current.x + dx
+                  const ny = dragPanStartRef.current.y + dy
+                  clampPan(nx, ny)
+                }}
+                onPointerUp={() => {
+                  setIsDragging(false)
+                  dragStartRef.current = null
+                }}
+                onPointerLeave={() => {
+                  setIsDragging(false)
+                  dragStartRef.current = null
+                }}
+              >
+                {previewPage && images[previewPage] ? (
+                  (() => {
+                    const computed = previewFitWidth > 0
+                    const widthPx = computed ? Math.round(previewFitWidth * previewZoom) : undefined
+                    return (
+                      <img
+                        ref={previewImgRef}
+                        src={images[previewPage]}
+                        alt={`Page ${previewPage}`}
+                        className={computed ? "block h-auto max-w-none flex-shrink-0 select-none" : "block h-auto max-w-full max-h-full object-contain select-none"}
+                        style={computed ? { width: `${widthPx}px`, transform: `translate(${previewPan.x}px, ${previewPan.y}px)`, willChange: "transform" } : undefined}
+                        onLoad={recomputePreviewFit}
+                        draggable={false}
+                      />
+                    )
+                  })()
+                ) : (
+                  <Skeleton className="h-64 w-full" />
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
