@@ -222,7 +222,7 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
     }
 
     // Determine which page is nearest to the top of the container
-    const nodes = el.querySelectorAll('[id^="page-" ]')
+    const nodes = el.querySelectorAll('[id^="page-"]')
     if (nodes.length) {
       const containerTop = el.getBoundingClientRect().top
       let nearest = selectedPage ?? 1
@@ -252,7 +252,10 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
       const el = document.getElementById(`page-${selectedPage}`)
       const cont = containerRef.current
       if (el && cont) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" })
+        // Scroll the container itself to the target page, so the internal
+        // scroll state remains intact and the scrollbar doesn't disappear.
+        const top = (el as HTMLElement).offsetTop - (cont as HTMLElement).offsetTop
+        cont.scrollTo({ top, behavior: "smooth" })
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -377,7 +380,7 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
             <div className="my-3 border-b" />
             <div className="grid gap-4 sm:grid-cols-3">
               <SmallMetric value={formatNumber(pageCount)} label="Pages" />
-              <SmallMetric value={formatBytes(doc?.file_size ?? doc?.metadata?.file_size)} label="Storage Size" />
+              <SmallMetric value={formatBytes(doc?.file_size || 0)} label="Storage Size" />
               <SmallMetric value={formatNumber(totalNodes)} label="Total Nodes" />
             </div>
           </CardContent>
@@ -408,7 +411,7 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
                   }}
                   className="w-28"
                 />
-                <Button variant="ghost" onClick={() => { setSelectedPage(null); setSelectedPageSource("input") }}>Reset</Button>
+                <Button variant="ghost" onClick={() => { setSelectedPage(1); setSelectedPageSource("init") }}>Reset</Button>
               </div>
             </CardAction>
           </CardHeader>
@@ -487,10 +490,10 @@ function TreeNodeView({ node, depth }: { node: TreeNode; depth: number }) {
   const typeLabel = node.node_type === "L1"
     ? "Hierarchy"
     : node.node_type === "L2"
-    ? "Topic"
-    : node.node_type === "L3"
-    ? "Detail"
-    : node.node_type
+      ? "Topic"
+      : node.node_type === "L3"
+        ? "Detail"
+        : node.node_type
   return (
     <div className="mb-3">
       <div className="flex items-start gap-2">
