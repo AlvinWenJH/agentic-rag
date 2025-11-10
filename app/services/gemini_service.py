@@ -70,8 +70,8 @@ class Section(BaseModel):
 class PageAnalysisResult(BaseModel):
     """Result from analyzing a single page."""
 
-    page_tree: List[Section] = Field(
-        description="Hierarchical tree structure with Sections as root nodes containing Subjects and Topics",
+    page_tree: Section = Field(
+        description="Hierarchical tree structure with Sections as root node containing Subjects and Topics",
     )
     visual_elements: List[VisualElement] = Field(description="Visual elements detected")
 
@@ -85,13 +85,11 @@ class GeminiVisualAnalyzer:
 
     def _count_tree_nodes(self, page_result: PageAnalysisResult) -> Dict[str, int]:
         """Count nodes in the tree structure."""
-        sections_count = len(page_result.page_tree)
-        subjects_count = sum(len(section.children) for section in page_result.page_tree)
-        topics_count = sum(
-            len(subject.children)
-            for section in page_result.page_tree
-            for subject in section.children
-        )
+        # With a single Section root, counts are derived from its children
+        section = page_result.page_tree
+        sections_count = 1
+        subjects_count = len(section.children)
+        topics_count = sum(len(subject.children) for subject in section.children)
 
         return {
             "sections": sections_count,
@@ -103,7 +101,7 @@ class GeminiVisualAnalyzer:
         self,
         document_id: str,
         page_number: int,
-        page_tree: List[Section],
+        page_tree: Section,
         visual_elements: List[VisualElement],
         image_path: str,
         token_usage: Dict[str, int],
@@ -114,7 +112,7 @@ class GeminiVisualAnalyzer:
         Args:
             document_id: Document ID
             page_number: Page number
-            page_tree: List of Section objects representing the page tree
+            page_tree: Section object representing the page tree root
             image_path: Path to the page image
 
         Returns:
@@ -124,7 +122,8 @@ class GeminiVisualAnalyzer:
             subtrees_collection = get_subtrees_collection()
 
             # Convert page_tree to dict format for MongoDB storage
-            page_tree_dict = [section.model_dump() for section in page_tree]
+            # Store as a list with a single root section to remain compatible
+            page_tree_dict = [page_tree.model_dump()]
             elements = [ve.model_dump() for ve in visual_elements]
 
             # Create document structure for MongoDB
@@ -136,14 +135,10 @@ class GeminiVisualAnalyzer:
                 "image_path": image_path,
                 "created_at": datetime.utcnow(),
                 "processing_metadata": {
-                    "sections_count": len(page_tree),
-                    "subjects_count": sum(
-                        len(section.children) for section in page_tree
-                    ),
+                    "sections_count": 1,
+                    "subjects_count": len(page_tree.children),
                     "topics_count": sum(
-                        len(subject.children)
-                        for section in page_tree
-                        for subject in section.children
+                        len(subject.children) for subject in page_tree.children
                     ),
                     "token_usage": token_usage,
                     "analysis_method": "gemini_visual_page_analysis",
@@ -408,8 +403,8 @@ class GeminiVisualAnalyzer:
             )
             # Return empty result instead of failing completely
             return PageAnalysisResult(
-                page_tree=[],
-                visual_elements={"error": str(e)},
+                page_tree=Section(title="Empty", summary="No content due to analysis error", children=[]),
+                visual_elements=[],
             )
 
     async def _prepare_single_image(

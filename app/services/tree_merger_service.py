@@ -49,8 +49,8 @@ class MergeOperation(BaseModel):
 class MergePatch(BaseModel):
     """Structured output for operations to integrate tree nodes."""
 
-    merge_operations: List[MergeOperation] = Field(
-        description="List of operations to merge or connect nodes"
+    merge_operation: MergeOperation = Field(
+        description="Operation to merge or connect nodes"
     )
 
 
@@ -237,17 +237,17 @@ You have TWO types of operations available:
 - Retains target node's title/summary, combines pages and children
 - Best for duplicate or overlapping L1 sections
 
-**CONNECT Operation**: Use when L1 nodes are different but should be structurally linked
+**CONNECT Operation**: Use when L1 nodes are different but should be structurally linked as a new child of the target node
 - Adds source L1 node as a new child to target node without merging content
 - Preserves both nodes' distinct identities
 - Best for organizing different but related L1 topics hierarchically
 
-Generate operations with these fields:
+Generate operation with these fields:
 - operation_type: "merge" or "connect"
 - source_path: JSON path to L1 source node in the new subtree (e.g., "new", "new/child_0", "new/child_1")
 - target_path: JSON path to target location in current tree (e.g., "current/child_1")
 
-CONSTRAINT: Only generate operations for the L1 nodes shown in the NEW SUBTREE section above. Each operation will process the entire subtree under that L1 node."""
+CONSTRAINT: Only generate operation for the L1 nodes shown in the NEW SUBTREE section above. The operation will process the entire subtree under that L1 node."""
 
                     agent = self._create_agent(system_prompt)
                     print(
@@ -338,7 +338,7 @@ CONSTRAINT: Only generate operations for the L1 nodes shown in the NEW SUBTREE s
             # Work with a copy to avoid modifying the original
             result_tree = json.loads(json.dumps(current_tree))
 
-            for operation in merge_patch.merge_operations:
+            for operation in [merge_patch.merge_operation]:
                 # Skip connect operations where source and target start with same path prefix
                 if operation.operation_type == "connect":
                     source_prefix = (
