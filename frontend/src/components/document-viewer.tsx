@@ -633,6 +633,17 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
                   setIsDragging(false)
                   dragStartRef.current = null
                 }}
+                onWheel={(e) => {
+                  // Zoom with mouse wheel. Scroll up to zoom in, down to zoom out.
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setPreviewZoom((z) => {
+                    const factor = e.deltaY < 0 ? 1.1 : 0.9
+                    const nz = Number((z * factor).toFixed(2))
+                    const clamped = Math.max(1, Math.min(5, nz))
+                    return clamped
+                  })
+                }}
               >
                 {previewPage && images[previewPage] ? (
                   (() => {
