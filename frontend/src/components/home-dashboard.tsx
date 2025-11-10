@@ -5,7 +5,6 @@ import Link from "next/link"
 import { FileText, Folder, MessageSquare, CircleCheckBig, Clock, Upload, XCircle } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyMedia, EmptyContent } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -37,7 +36,6 @@ export default function HomeDashboard() {
                 />
             </div>
 
-            <Separator className="my-2" />
 
             {/* Recent sections (empty state until backend is ready) */}
             <div className="grid gap-4 sm:grid-cols-2">

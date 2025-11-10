@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import BreadcrumbCurrentPage from "@/components/breadcrumb-current-page"
+import DocumentsDashboard from "@/components/documents-dashboard"
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -40,7 +41,7 @@ export default function Page() {
                     </div>
                 </header>
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <div className="bg-muted/50 min-h-[40vh] rounded-xl" />
+                    <DocumentsDashboard />
                 </div>
             </SidebarInset>
         </SidebarProvider>
