@@ -804,3 +804,40 @@ async def list_document_visual_elements(document_id: str):
         raise HTTPException(
             status_code=500, detail="Failed to list document visual elements"
         )
+
+
+@router.get("/{document_id}/page/{page_number}")
+async def get_document_page_image_base64(
+    document_id: str,
+    page_number: int = 1,
+):
+    """
+    Get the image of a specific document page as base64-encoded string.
+
+    Args:
+        document_id: Document ID to retrieve page image for
+        page_number: Page number to get image for (1-based index)
+
+    Returns:
+        Base64-encoded string of the page image
+    """
+    try:
+        from app.core.storage import get_page_image
+
+        s3_bucket = "images"
+        formatted_page = f"{page_number:04d}"
+        s3_key = f"{document_id}/page_{formatted_page}.png"
+        page_base64 = await get_page_image(s3_bucket, s3_key)
+        return {"page_base64": page_base64}
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Document page not found")
+    except Exception as e:
+        logger.error(
+            "Failed to get document page image base64",
+            document_id=document_id,
+            page_number=page_number,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to get document page image base64"
+        )

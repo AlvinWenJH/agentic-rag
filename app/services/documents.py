@@ -407,17 +407,17 @@ async def get_document_visual_elements(
 ) -> List[Dict[str, Optional[str]]]:
     """
     Retrieve all visual elements for a document from all its pages.
-    
+
     Args:
         document_id: The document ID to retrieve visual elements for
-        
+
     Returns:
         List of dictionaries containing visual elements with keys:
         - element: Type of visual element (e.g., image, table)
         - title: Clear, descriptive title
         - summary: Brief content summary
         - page_number: Page number where the element is found
-        
+
     Raises:
         NotFoundError: If no subtrees found for the document
     """
@@ -426,52 +426,52 @@ async def get_document_visual_elements(
             "Retrieving visual elements for document",
             document_id=document_id,
         )
-        
+
         # Get subtrees collection
         subtrees_collection = get_subtrees_collection()
-        
+
         # Query all subtrees for the document, sorted by page number
-        cursor = subtrees_collection.find(
-            {"document_id": document_id}
-        ).sort("page_number", 1)
-        
+        cursor = subtrees_collection.find({"document_id": document_id}).sort(
+            "page_number", 1
+        )
+
         subtrees = await cursor.to_list(length=None)
-        
+
         if not subtrees:
             logger.warning(
                 "No subtrees found for document",
                 document_id=document_id,
             )
             raise NotFoundError(f"No visual elements found for document {document_id}")
-        
+
         # Extract visual elements from all pages
         visual_elements = []
         total_elements = 0
-        
+
         for subtree in subtrees:
             page_number = subtree.get("page_number")
             page_visual_elements = subtree.get("visual_elements", [])
-            
+
             # Add page_number to each visual element
             for element in page_visual_elements:
                 visual_element = {
                     "element": element.get("element"),
                     "title": element.get("title"),
                     "summary": element.get("summary"),
-                    "page_number": page_number
+                    "page_number": page_number,
                 }
                 visual_elements.append(visual_element)
                 total_elements += 1
-        
+
         logger.info(
             "Visual elements retrieval completed",
             document_id=document_id,
             total_pages=len(subtrees),
             total_elements=total_elements,
         )
-        
+
         return visual_elements
-        
+
     except NotFoundError:
         # Re-raise NotFoundError as-is
         raise

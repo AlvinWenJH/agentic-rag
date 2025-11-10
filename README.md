@@ -1,10 +1,10 @@
-# Vectorless RAG System
+# Achivist
 
 A visual-first document processing and query system that uses computer vision and AI for intelligent document analysis without traditional vector embeddings.
 
 ## 🚀 Overview
 
-The Vectorless RAG system revolutionizes document processing by:
+The Achivist system revolutionizes document processing by:
 
 - **Visual-First Architecture**: Converting PDFs to images and using computer vision for analysis
 - **Hierarchical Topic Trees**: Organizing document content in structured, navigable trees
@@ -494,30 +494,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 - **minio**: MinIO object storage (port 9000, 9001)
 - **minio-client**: MinIO bucket initialization
 
-## 🧪 Testing
-
-### Run Tests
-
-```bash
-# Install test dependencies
-pip install -r requirements.txt
-
-# Run all tests
-pytest tests/ -v
-
-# Run specific test file
-pytest tests/test_services.py -v
-
-# Run with coverage
-pytest tests/ --cov=app --cov-report=html
-```
-
-### Test Categories
-
-- **Unit Tests**: Individual service and function testing
-- **Integration Tests**: Service interaction testing
-- **API Tests**: Endpoint testing with mocked dependencies
-- **Pipeline Tests**: End-to-end workflow testing
 
 ## 📊 Monitoring and Logging
 
@@ -580,21 +556,6 @@ docker-compose up -d mongodb redis minio
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Code Quality
-
-```bash
-# Format code
-black app/ tests/
-
-# Sort imports
-isort app/ tests/
-
-# Lint code
-flake8 app/ tests/
-
-# Type checking
-mypy app/
-```
 
 ### Project Structure
 
@@ -633,121 +594,13 @@ vectorless-rag/
 └── README.md
 ```
 
-## 🚨 Troubleshooting
+### Frontend
+1. Login page with email and password form and sign up link
+2. Sign up page with email, username, fullname, and password and sign up button then redirection to sign in page if signup success
+3. Home page with short explanation of the application concept with cards like "Start Uploading" "Start Querying" also sidebar for page navigation and profile card to show the username if clicked show option settings and log out
+4. Documents page with overall metrics on top and add new button, below is the table of document list with quick action button to view, download and delete
+5. Document view page to view the pdf and Document concept tree, 
+6. Chat interface with history management in sidebar, the chat will show the thought process and after result is fully received, there will be button to open a sheet to show the page navigating process, which is the tree navigated (i will give more detail when we are implementing this)
+7. User management only to show who are registered to the app
 
-### Common Issues
-
-#### 1. Gemini API Errors
-```bash
-# Check API key
-echo $GEMINI_API_KEY
-
-# Verify API access
-curl -H "Authorization: Bearer $GEMINI_API_KEY" \
-     https://generativelanguage.googleapis.com/v1/models
-```
-
-#### 2. MongoDB Connection Issues
-```bash
-# Check MongoDB status
-docker-compose logs mongodb
-
-# Test connection
-docker-compose exec mongodb mongosh --eval "db.adminCommand('ping')"
-```
-
-#### 3. MinIO Storage Issues
-```bash
-# Check MinIO status
-docker-compose logs minio
-
-# Access MinIO console
-open http://localhost:9001
-```
-
-#### 4. Memory Issues
-```bash
-# Check container memory usage
-docker stats
-
-# Increase Docker memory limit
-# Docker Desktop → Settings → Resources → Memory
-```
-
-### Performance Optimization
-
-1. **Database Indexing**: Ensure proper MongoDB indexes
-2. **Caching**: Configure Redis for optimal cache hit rates
-3. **Image Processing**: Optimize PDF to image conversion settings
-4. **Concurrent Processing**: Adjust worker counts based on CPU cores
-
-## 📈 Scaling
-
-### Horizontal Scaling
-
-```yaml
-# docker-compose.scale.yml
-services:
-  backend:
-    deploy:
-      replicas: 3
-  
-  mongodb:
-    deploy:
-      replicas: 3
-      
-  redis:
-    deploy:
-      replicas: 3
-```
-
-### Load Balancing
-
-```nginx
-# nginx.conf
-upstream backend {
-    server backend1:8000;
-    server backend2:8000;
-    server backend3:8000;
-}
-
-server {
-    listen 80;
-    location / {
-        proxy_pass http://backend;
-    }
-}
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Run quality checks
-6. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- Google Gemini for visual AI capabilities
-- Pydantic AI for type-safe AI processing
-- FastAPI for high-performance web framework
-- MongoDB for flexible document storage
-- MinIO for S3-compatible object storage
-
-## 📞 Support
-
-For support and questions:
-
-- Create an issue on GitHub
-- Check the documentation
-- Review the troubleshooting guide
-
----
-
-**Built with ❤️ for intelligent document processing**
+9. Settings page for changing theme and model used in query and indexing (Gemini 2.5 flash, Gemini 2.5 pro, or Gemini 2.5 flash lite)
