@@ -5,11 +5,15 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useSearchParams } from "next/navigation"
 import { FileText, HardDrive, Files, ListTree, ZoomIn, ZoomOut, RefreshCcw, Download, GitBranch, LibraryBig } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from "@/components/ui/card"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getBackendUrl } from "@/lib/env"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { ReactFlow, Background, Controls, Handle, Position, useReactFlow, type Node, type Edge } from "@xyflow/react"
+import "@xyflow/react/dist/style.css"
 
 type DocDetail = {
   id: string
@@ -100,6 +104,7 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
   const [loadingTree, setLoadingTree] = useState(true)
   const [errorMeta, setErrorMeta] = useState<string | null>(null)
   const [errorTree, setErrorTree] = useState<string | null>(null)
+  const [conceptTab, setConceptTab] = useState<"tree" | "graph">("tree")
 
   const pageCount = useMemo(() => resolvePageCount(doc), [doc])
 
@@ -551,36 +556,57 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
             <CardTitle className="flex items-center gap-2">
               <ListTree className="size-5 text-muted-foreground" /> Concept Tree
             </CardTitle>
+            <CardAction>
+              <Tabs value={conceptTab} onValueChange={(v) => setConceptTab((v as "tree" | "graph") ?? "tree")}>
+                <TabsList>
+                  <TabsTrigger value="tree">Tree</TabsTrigger>
+                  <TabsTrigger value="graph">Graph</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </CardAction>
           </CardHeader>
           <CardContent>
-            <div
-              className="overflow-y-auto rounded border max-h-screen"
-              style={{ minHeight: containerMinHeight ? `${containerMinHeight}px` : undefined }}
-            >
-              {loadingTree ? (
-                <div className="flex flex-col gap-3 p-2">
-                  {Array(3).fill(0).map((_, i) => (
-                    <Skeleton key={i} className="h-6 w-full" />
-                  ))}
-                </div>
-              ) : selectedPage ? (
-                filteredTree ? (
-                  <div className="p-2">
-                    <TreeNodeView node={filteredTree} depth={0} />
+            {conceptTab === "tree" ? (
+              <div
+                className="overflow-y-auto rounded border max-h-screen"
+                style={{ minHeight: containerMinHeight ? `${containerMinHeight}px` : undefined }}
+              >
+                {loadingTree ? (
+                  <div className="flex flex-col gap-3 p-2">
+                    {Array(3).fill(0).map((_, i) => (
+                      <Skeleton key={i} className="h-6 w-full" />
+                    ))}
                   </div>
+                ) : selectedPage ? (
+                  filteredTree ? (
+                    <div className="p-2">
+                      <TreeNodeView node={filteredTree} depth={0} />
+                    </div>
+                  ) : (
+                    <p className="p-2 text-sm text-muted-foreground">No nodes for page {selectedPage}</p>
+                  )
+                ) : tree?.tree_data ? (
+                  <div className="p-2">
+                    <TreeNodeView node={tree.tree_data} depth={0} />
+                  </div>
+                ) : errorTree ? (
+                  <p className="p-2 text-sm text-destructive">{errorTree}</p>
                 ) : (
-                  <p className="p-2 text-sm text-muted-foreground">No nodes for page {selectedPage}</p>
-                )
-              ) : tree?.tree_data ? (
-                <div className="p-2">
-                  <TreeNodeView node={tree.tree_data} depth={0} />
-                </div>
-              ) : errorTree ? (
-                <p className="p-2 text-sm text-destructive">{errorTree}</p>
-              ) : (
-                <p className="p-2 text-sm text-muted-foreground">No tree available</p>
-              )}
-            </div>
+                  <p className="p-2 text-sm text-muted-foreground">No tree available</p>
+                )}
+              </div>
+            ) : (
+              <div
+                className="rounded border w-full"
+                style={{ height: containerMinHeight ? containerMinHeight : 600 }}
+              >
+                <ConceptGraph
+                  root={selectedPage ? filteredTree ?? null : tree?.tree_data ?? null}
+                  loading={loadingTree}
+                  error={errorTree}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -706,6 +732,131 @@ function TreeNodeView({ node, depth }: { node: TreeNode; depth: number }) {
           ))}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+// Graph view using React Flow
+function ConceptGraph({ root, loading, error }: { root: TreeNode | null; loading: boolean; error: string | null }) {
+  const xGap = 280
+  const yGap = 130
+
+  function flattenToGraph(rootNode: TreeNode): { nodes: Node[]; edges: Edge[] } {
+    const nodes: Node[] = []
+    const edges: Edge[] = []
+    const depthCounts = new Map<number, number>()
+
+    let idCounter = 0
+    function nextId() { idCounter++; return `n-${idCounter}` }
+
+    function visit(node: TreeNode, depth: number, parentId?: string): string {
+      const rowIndex = depthCounts.get(depth) ?? 0
+      depthCounts.set(depth, rowIndex + 1)
+      const id = nextId()
+      const typeLabel = node.node_type === "L1" ? "Hierarchy" : node.node_type === "L2" ? "Topic" : node.node_type === "L3" ? "Detail" : node.node_type ?? "Node"
+      const label = node.title ?? "Untitled"
+
+      nodes.push({
+        id,
+        type: "concept",
+        position: { x: depth * xGap, y: rowIndex * yGap },
+        data: {
+          label,
+          typeLabel,
+          summary: node.summary ?? "",
+          pages: Array.isArray(node.pages) ? node.pages : [],
+        },
+      } as Node)
+
+      if (parentId) {
+        edges.push({ id: `e-${parentId}-${id}`, source: parentId, target: id, animated: true })
+      }
+
+      const children = Array.isArray(node.children) ? node.children : []
+      for (const child of children) {
+        visit(child, depth + 1, id)
+      }
+      return id
+    }
+
+    visit(rootNode, 0)
+    return { nodes, edges }
+  }
+
+  const graph = React.useMemo(() => {
+    if (!root) return { nodes: [], edges: [] }
+    return flattenToGraph(root)
+  }, [root])
+
+  const nodeTypes = React.useMemo(() => ({ concept: ConceptNode }), [])
+
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-3 p-2">
+        {Array(3).fill(0).map((_, i) => (
+          <Skeleton key={i} className="h-6 w-full" />
+        ))}
+      </div>
+    )
+  }
+  if (error) return <p className="p-2 text-sm text-destructive">{error}</p>
+  if (!root) return <p className="p-2 text-sm text-muted-foreground">No graph available</p>
+
+  // Helper component to call fitView after ReactFlow mounts (inside provider)
+  function FitViewOnInit() {
+    const rf = useReactFlow()
+    React.useEffect(() => {
+      try { rf.fitView({ padding: 0.2 }) } catch { }
+    }, [rf])
+    return null
+  }
+
+  if (graph.nodes.length === 0) {
+    return <p className="p-2 text-sm text-muted-foreground">No nodes to render</p>
+  }
+
+  return (
+    <ReactFlow
+      nodes={graph.nodes}
+      edges={graph.edges}
+      fitView
+      nodeTypes={nodeTypes}
+      minZoom={0.2}
+      proOptions={{ hideAttribution: true }}
+      style={{ width: "100%", height: "100%" }}
+    >
+      <FitViewOnInit />
+      <Background />
+      <Controls />
+    </ReactFlow>
+  )
+}
+
+function ConceptNode({ data }: { data: { label: string; typeLabel: string; summary?: string; pages?: number[] } }) {
+  const title = data.label ?? "Untitled"
+  const displayLabel = title.length > 28 ? `${title.slice(0, 28)}…` : title
+  return (
+    <div className="rounded-md border bg-background shadow-xs">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="px-3 py-2">
+            <div className="text-sm font-medium" title={title}>{displayLabel}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">{data.typeLabel}</div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent sideOffset={6}>
+          <div className="max-w-xs">
+            <p className="text-xs font-medium">{title}</p>
+            {data.summary ? <p className="text-xs leading-snug">{data.summary}</p> : <p className="text-xs text-muted-foreground">No summary</p>}
+            {Array.isArray(data.pages) && data.pages.length ? (
+              <p className="mt-1 text-xs text-muted-foreground">p. {data.pages.join(", ")}</p>
+            ) : null}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+      <Handle type="target" position={Position.Left} />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }
