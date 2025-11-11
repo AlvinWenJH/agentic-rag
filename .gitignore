@@ -236,3 +236,4 @@ dev/
 **/.next
 **/node_modules
 **/backup
+*.pdf
