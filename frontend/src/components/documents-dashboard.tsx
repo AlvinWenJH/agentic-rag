@@ -52,6 +52,10 @@ export default function DocumentsDashboard() {
   const [uploadDescription, setUploadDescription] = React.useState("")
   const [uploadFile, setUploadFile] = React.useState<File | null>(null)
   const backendUrl = getBackendUrl()
+  // Delete dialog state
+  const [openDelete, setOpenDelete] = React.useState(false)
+  const [deleteTarget, setDeleteTarget] = React.useState<DocumentItem | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
 
   React.useEffect(() => {
     async function fetchAll() {
@@ -94,6 +98,39 @@ export default function DocumentsDashboard() {
     } catch (err) {
       console.error(err)
       alert((err as any)?.message ?? "Unable to download document")
+    }
+  }
+
+  function confirmDelete(doc: DocumentItem) {
+    setDeleteTarget(doc)
+    setOpenDelete(true)
+  }
+
+  async function performDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`${backendUrl}/api/v1/documents/${deleteTarget.id}`, {
+        method: "DELETE",
+        headers: { accept: "application/json" },
+      })
+      if (!res.ok) {
+        let message = `Delete failed (${res.status})`
+        try {
+          const data = await res.json().catch(() => ({}))
+          if (data?.detail) message = Array.isArray(data.detail) ? data.detail[0]?.msg ?? message : data.detail
+          if (data?.message) message = data.message
+        } catch (_) {}
+        throw new Error(message)
+      }
+      // Optimistically update list
+      setDocs((prev) => prev.filter((d) => d.id !== deleteTarget.id))
+      setOpenDelete(false)
+      setDeleteTarget(null)
+    } catch (err: any) {
+      alert(err?.message ?? "Unable to delete document")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -267,6 +304,33 @@ export default function DocumentsDashboard() {
                 </form>
               </DialogContent>
             </Dialog>
+            {/* Delete confirmation dialog */}
+            <Dialog open={openDelete} onOpenChange={setOpenDelete}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Delete document?</DialogTitle>
+                  <DialogDescription>
+                    This will mark the document as deleted and remove it from the list.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="text-sm">
+                  {deleteTarget ? (
+                    <>
+                      <p className="font-medium">{deleteTarget.filename || deleteTarget.title || deleteTarget.id}</p>
+                      <p className="text-muted-foreground mt-1">Are you sure you want to continue?</p>
+                    </>
+                  ) : null}
+                </div>
+                <DialogFooter>
+                  <Button onClick={performDelete} disabled={deleting} className="bg-destructive text-destructive-foreground hover:opacity-95">
+                    {deleting ? "Deleting..." : "Delete"}
+                  </Button>
+                  <DialogClose asChild>
+                    <Button type="button" variant="outline">Cancel</Button>
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
 
           {loadingDocs ? (
@@ -338,7 +402,14 @@ export default function DocumentsDashboard() {
                           >
                             <Download className="size-4" />
                           </Button>
-                          <Button variant="ghost" size="icon-sm" aria-label="Delete"><Trash className="size-4" /></Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Delete"
+                            onClick={() => confirmDelete(doc)}
+                          >
+                            <Trash className="size-4" />
+                          </Button>
                         </div>
                       </td>
                     </tr>

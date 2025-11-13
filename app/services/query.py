@@ -41,9 +41,12 @@ class QueryDependencies:
     document_id: str
     query: str
     tool_usage: dict
-    query_paths: List[str] = field(
-        default_factory=lambda: ["/"]
+    query_paths: List[dict] = field(
+        default_factory=lambda: []
     )  # Track paths accessed during query
+    retrieved_pages: List[int] = field(
+        default_factory=lambda: []
+    )  # Track pages retrieved during query
 
 
 class QueryService:
@@ -61,9 +64,12 @@ class QueryService:
         )
         system_prompt = """
         You are a profesional information retriever, you have 2 tools:
-        1. get_subtree_by_paths: to navigate document sections
+        1. navigate_document: to navigate document sections
         2. fetch_page_details: get more details from the pages
-        You can navigate through the document structure first to know where the information might be in, then use the fetch_page_details tool if needed.
+        3. list_detected_document_visual_elements: list all visual elements in the document
+
+        You can navigate through the document structure first to know where the information might be in, then use the fetch_page_details tool if needed (like if you think there might be information in that page but not included in the tree).
+        Remember the tree is only the document structure, it does not contain the page details.
         Always try to accomplish your mission as you literally have all means to find any information from the document.
         """
 
@@ -80,11 +86,11 @@ class QueryService:
         """Register tools with the agent."""
 
         @self.agent.tool
-        async def get_subtree_by_paths(
+        async def navigate_document(
             ctx: RunContext[QueryDependencies], paths: List[str] = ["/"]
         ) -> ToolReturn:
             """
-            Get subtree data from specified paths in the document tree.
+            Navigate document structure to explore specified paths.
 
             Args:
                 paths: List of paths to explore (e.g., ["/", "/children/0/children/1"])
@@ -110,7 +116,7 @@ class QueryService:
             return await self._fetch_page_details(ctx, pages)
 
         @self.agent.tool
-        async def fetch_document_visual_elements(
+        async def list_detected_document_visual_elements(
             ctx: RunContext[QueryDependencies],
             limit: int = 10,
             skip: int = 0,
@@ -223,19 +229,20 @@ class QueryService:
                 # Add paths to context for tracking query journey
                 for path in paths:
                     if path not in ctx.deps.query_paths:
-                        ctx.deps.query_paths.append(path)
+                        ctx.deps.query_paths.append(
+                            {
+                                "document_id": ctx.deps.document_id,
+                                "path": path,
+                                "depth": depth,
+                            }
+                        )
 
                 results = ""
                 for path in paths:
                     try:
-                        # print(
-                        #     f"Fetching subtree from {ctx.deps.document_id} at {path}",
-                        #     flush=True,
-                        # )
                         subtree_data = await get_document_tree_from_path(
                             ctx.deps.document_id, path, depth, serialize=True
                         )
-                        # print(f"Fetched subtree {subtree_data}", flush=True)
                         for subtree in subtree_data:
                             results += f"Path: {subtree['path']}\nName: {subtree['title']}\nSummary: {subtree['summary'][:300]}...\nPages: {','.join([str(p) for p in subtree['pages']])}\n\n"
                         logger.info(
@@ -312,15 +319,7 @@ class QueryService:
                     "total_calls": 0,
                 }
                 prompt = f"""
-                Analyze this page image from the document and provide detailed information that could help answer the following query: "{query}"
-                
-                Please provide:
-                1. A summary of the main content on this page
-                2. Key information, data, or insights relevant to the query
-                3. Any specific details that directly relate to the user's question
-                4. Text content if readable
-                5. Visual elements like charts, graphs, or diagrams if present
-                
+                Analyze this page image from the document and provide detailed concise information that could help answer the following query: "{query}"
                 Focus on information that would be useful for answering the user
                 """
                 image_bytes_list = []
@@ -369,7 +368,8 @@ class QueryService:
                     content,
                     deps=ctx.deps,
                     model_settings=GoogleModelSettings(
-                        google_thinking_config={"thinkingBudget": 512}
+                        max_tokens=int(1000 * len(image_contents)),
+                        google_thinking_config={"thinkingBudget": 512},
                     ),
                 )
 
@@ -414,6 +414,14 @@ class QueryService:
                         "token_usage": usage.__dict__,
                     }
                 )
+                for page in pages:
+                    if {
+                        "document_id": document_id,
+                        "page": page,
+                    } not in ctx.deps.retrieved_pages:
+                        ctx.deps.retrieved_pages.append(
+                            {"document_id": document_id, "page": page}
+                        )
                 return ToolReturn(return_value=analysis_results)
 
             except Exception as e:
@@ -524,6 +532,7 @@ class QueryService:
                 document_id=document_id,
                 query=query,
                 query_paths=deps.query_paths,
+                retrieved_pages=deps.retrieved_pages,
                 user_id=user_id,
             )
 

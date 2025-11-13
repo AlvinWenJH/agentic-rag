@@ -177,19 +177,21 @@ function RecentDocumentsCard() {
                 ) : hasItems ? (
                     <div className="flex flex-col gap-4">
                         {items.map((doc) => (
-                            <Button key={doc.id} variant="outline" className="flex w-full items-center justify-between gap-3 py-6">
-                                <span className="flex min-w-0 items-center gap-3">
-                                    <FileText className="size-5 shrink-0 text-muted-foreground" />
-                                    <span className="min-w-0 flex flex-col items-start text-left">
-                                        <span className="truncate">{doc?.filename ?? doc?.title ?? doc?.id}</span>
-                                        <span className="mt-1 text-xs leading-snug text-muted-foreground">{formatTimeAgo(doc?.updated_at)}</span>
+                            <Link key={doc.id} href={`/documents/${encodeURIComponent(doc.id)}`} prefetch>
+                                <Button variant="outline" className="flex w-full items-center justify-between gap-3 py-6">
+                                    <span className="flex min-w-0 items-center gap-3">
+                                        <FileText className="size-5 shrink-0 text-muted-foreground" />
+                                        <span className="min-w-0 flex flex-col items-start text-left">
+                                            <span className="truncate">{doc?.filename ?? doc?.title ?? doc?.id}</span>
+                                            <span className="mt-1 text-xs leading-snug text-muted-foreground">{formatTimeAgo(doc?.updated_at)}</span>
+                                        </span>
                                     </span>
-                                </span>
-                                <span className="ml-auto flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs capitalize">
-                                    <StatusIcon status={doc?.status} />
-                                    {doc?.status ?? "unknown"}
-                                </span>
-                            </Button>
+                                    <span className="ml-auto flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs capitalize">
+                                        <StatusIcon status={doc?.status} />
+                                        {doc?.status ?? "unknown"}
+                                    </span>
+                                </Button>
+                            </Link>
                         ))}
                     </div>
                 ) : (

@@ -155,6 +155,7 @@ async def download_file(bucket: str, object_name: str, file_path: str) -> str:
 async def download_file_data(bucket: str, object_name: str) -> bytes:
     """Download file data from MinIO storage."""
     try:
+        logger.info("Downloading file data", bucket=bucket, object_name=object_name)
         client = get_storage_client()
         loop = asyncio.get_event_loop()
 

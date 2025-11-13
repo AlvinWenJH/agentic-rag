@@ -14,6 +14,7 @@ import {
     SidebarProvider,
     SidebarTrigger,
 } from "@/components/ui/sidebar"
+import ChatPane from "@/components/query/chat-pane"
 
 export default function Page() {
     return (
@@ -40,7 +41,7 @@ export default function Page() {
                     </div>
                 </header>
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <div className="bg-muted/50 min-h-[40vh] rounded-xl" />
+                    <ChatPane />
                 </div>
             </SidebarInset>
         </SidebarProvider>

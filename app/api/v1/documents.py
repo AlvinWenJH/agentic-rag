@@ -329,7 +329,9 @@ async def list_documents(
         documents_collection = get_documents_collection()
 
         # Build filter
-        filter_dict = {}
+        # Include documents that are not deleted or where the is_deleted field is absent
+        # Using $ne: True matches docs where is_deleted is not true OR missing
+        filter_dict = {"is_deleted": {"$ne": True}}
         if user_id:
             filter_dict["user_id"] = user_id
         if status:
@@ -472,21 +474,19 @@ async def delete_document(document_id: str):
         # Delete files from storage
         try:
             # Delete original PDF
-            if document.get("file_path"):
+            if document.get("storage_path"):
                 # Note: MinIO delete would be implemented here
                 pass
 
-            # Delete images
-            if document.get("image_paths"):
-                # Note: MinIO delete would be implemented here
-                pass
         except Exception as e:
             logger.warning(
                 "Failed to delete some files", document_id=document_id, error=str(e)
             )
 
         # Delete document record
-        await documents_collection.delete_one({"_id": object_id})
+        await documents_collection.update_one(
+            {"_id": object_id}, {"$set": {"is_deleted": True}}
+        )
 
         logger.info("Document deleted", document_id=document_id)
 
@@ -515,9 +515,11 @@ async def download_document(document_id: str):
         if not document:
             raise NotFoundError(f"Document {document_id} not found")
 
-        file_path = document.get("file_path")
-        if not file_path:
-            raise NotFoundError("Document file not found")
+        file_path = document.get("storage_path")
+
+        logger.info(
+            "Downloading document", document_id=document_id, file_path=file_path
+        )
 
         # Download file from storage
         file_data = await download_file_data(
