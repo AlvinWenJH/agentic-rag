@@ -13,7 +13,7 @@ from bson.errors import InvalidId
 
 from app.core.database import get_users_collection
 from app.core.exceptions import NotFoundError, ValidationError, ConflictError
-
+import os
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -75,90 +75,107 @@ class UserStats(BaseModel):
 @router.post("/", response_model=UserResponse)
 async def create_user(user_data: UserCreate):
     """Create a new user."""
-    try:
-        logger.info(
-            "Creating new user", username=user_data.username, email=user_data.email
-        )
+    raise HTTPException(status_code=403, detail="Coming soon!")
+    # try:
+    #     logger.info(
+    #         "Creating new user", username=user_data.username, email=user_data.email
+    #     )
 
-        users_collection = get_users_collection()
+    #     users_collection = get_users_collection()
 
-        # Check if user already exists
-        existing_user = await users_collection.find_one(
-            {"$or": [{"email": user_data.email}, {"username": user_data.username}]}
-        )
+    #     # Check if user already exists
+    #     existing_user = await users_collection.find_one(
+    #         {"$or": [{"email": user_data.email}, {"username": user_data.username}]}
+    #     )
 
-        if existing_user:
-            if existing_user["email"] == user_data.email:
-                raise ConflictError("User with this email already exists")
-            else:
-                raise ConflictError("User with this username already exists")
+    #     if existing_user:
+    #         if existing_user["email"] == user_data.email:
+    #             raise ConflictError("User with this email already exists")
+    #         else:
+    #             raise ConflictError("User with this username already exists")
 
-        # Create user document
-        now = datetime.utcnow()
-        user_doc = {
-            "email": user_data.email,
-            "username": user_data.username,
-            "full_name": user_data.full_name,
-            "is_active": True,
-            "password_hash": "hashed_" + user_data.password,  # Simplified hashing
-            "created_at": now,
-            "updated_at": now,
-            "last_login": None,
-            "query_count": 0,
-            "document_count": 0,
-        }
+    #     # Create user document
+    #     now = datetime.utcnow()
+    #     user_doc = {
+    #         "email": user_data.email,
+    #         "username": user_data.username,
+    #         "full_name": user_data.full_name,
+    #         "is_active": True,
+    #         "password_hash": "hashed_" + user_data.password,  # Simplified hashing
+    #         "created_at": now,
+    #         "updated_at": now,
+    #         "last_login": None,
+    #         "query_count": 0,
+    #         "document_count": 0,
+    #     }
 
-        # Insert user
-        result = await users_collection.insert_one(user_doc)
-        user_id = str(result.inserted_id)
+    #     # Insert user
+    #     result = await users_collection.insert_one(user_doc)
+    #     user_id = str(result.inserted_id)
 
-        # Return user response
-        user_doc["id"] = user_id
-        del user_doc["_id"]
-        del user_doc["password_hash"]
+    #     # Return user response
+    #     user_doc["id"] = user_id
+    #     del user_doc["_id"]
+    #     del user_doc["password_hash"]
 
-        logger.info(
-            "User created successfully", user_id=user_id, username=user_data.username
-        )
+    #     logger.info(
+    #         "User created successfully", user_id=user_id, username=user_data.username
+    #     )
 
-        return UserResponse(**user_doc)
+    #     return UserResponse(**user_doc)
 
-    except ConflictError:
-        raise HTTPException(status_code=409, detail="User already exists")
-    except Exception as e:
-        logger.error("Failed to create user", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to create user")
+    # except ConflictError:
+    #     raise HTTPException(status_code=409, detail="User already exists")
+    # except Exception as e:
+    #     logger.error("Failed to create user", error=str(e))
+    #     raise HTTPException(status_code=500, detail="Failed to create user")
 
 
 @router.post("/login", response_model=UserResponse)
 async def login_user(user_data: UserLogin):
     """Login user and return user details."""
-    try:
-        logger.info("User login attempt", username=user_data.username)
-        users_collection = get_users_collection()
-
-        # Find user by username
-        user = await users_collection.find_one({"username": user_data.username})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        # Check password
-        if user["password_hash"] != "hashed_" + user_data.password:
-            raise HTTPException(status_code=401, detail="Incorrect password")
-        # Update last login time
-        await users_collection.update_one(
-            {"_id": user["_id"]}, {"$set": {"last_login": datetime.utcnow()}}
+    if (
+        user_data.username == os.environ["DEFAULT_ADMIN_USERNAME"]
+        and user_data.password == os.environ["DEFAULT_ADMIN_PASSWORD"]
+    ):
+        return UserResponse(
+            id="admin",
+            email=os.getenv("DEFAULT_ADMIN_EMAIL"),
+            username=os.getenv("DEFAULT_ADMIN_USERNAME"),
+            full_name=os.getenv("DEFAULT_ADMIN_FULL_NAME"),
+            is_active=True,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            last_login=None,
+            query_count=0,
+            document_count=0,
         )
-        # Return user response
-        user["id"] = str(user["_id"])
-        del user["_id"]
-        del user["password_hash"]
-        return UserResponse(**user)
+    # try:
+    #     logger.info("User login attempt", username=user_data.username)
+    #     users_collection = get_users_collection()
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Failed to login user", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to login user")
+    #     # Find user by username
+    #     user = await users_collection.find_one({"username": user_data.username})
+    #     if not user:
+    #         raise HTTPException(status_code=404, detail="User not found")
+    #     # Check password
+    #     if user["password_hash"] != "hashed_" + user_data.password:
+    #         raise HTTPException(status_code=401, detail="Incorrect password")
+    #     # Update last login time
+    #     await users_collection.update_one(
+    #         {"_id": user["_id"]}, {"$set": {"last_login": datetime.utcnow()}}
+    #     )
+    #     # Return user response
+    #     user["id"] = str(user["_id"])
+    #     del user["_id"]
+    #     del user["password_hash"]
+    #     return UserResponse(**user)
+
+    # except HTTPException:
+    #     raise
+    # except Exception as e:
+    #     logger.error("Failed to login user", error=str(e))
+    #     raise HTTPException(status_code=500, detail="Failed to login user")
 
 
 @router.get("/stats", response_model=UserStats)
