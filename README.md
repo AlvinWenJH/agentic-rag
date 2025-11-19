@@ -58,7 +58,7 @@ PDF Upload → Image Conversion → Visual Analysis → Topic Tree → Query Pro
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd agentic-rag
+cd archivist
 
 # Copy environment template
 cp .env.example .env
@@ -88,125 +88,6 @@ curl http://localhost:8000/health
 
 # API documentation
 open http://localhost:8000/docs
-```
-
-## 📚 API Documentation
-
-### Document Management
-
-#### Upload Document
-```bash
-POST /api/v1/documents/upload
-Content-Type: multipart/form-data
-
-curl -X POST "http://localhost:8000/api/v1/documents/upload" \
-     -F "file=@document.pdf" \
-     -F "title=My Document" \
-     -F "description=Document description" \
-     -F "user_id=user123"
-```
-
-#### Get Document
-```bash
-GET /api/v1/documents/{document_id}
-
-curl "http://localhost:8000/api/v1/documents/doc123"
-```
-
-#### List Documents
-```bash
-GET /api/v1/documents/?user_id=user123&status=PROCESSED&limit=10
-
-curl "http://localhost:8000/api/v1/documents/?status=PROCESSED&limit=10"
-```
-
-#### Get Document Statistics
-```bash
-GET /api/v1/documents/stats
-
-curl "http://localhost:8000/api/v1/documents/stats"
-```
-
-#### Get Document Processing Status
-```bash
-GET /api/v1/documents/{document_id}/status
-
-curl "http://localhost:8000/api/v1/documents/doc123/status"
-```
-
-#### Update Document
-```bash
-PUT /api/v1/documents/{document_id}
-Content-Type: application/json
-
-curl -X PUT "http://localhost:8000/api/v1/documents/doc123" \
-     -H "Content-Type: application/json" \
-     -d '{"title": "Updated Title", "description": "Updated description"}'
-```
-
-#### Delete Document
-```bash
-DELETE /api/v1/documents/{document_id}
-
-curl -X DELETE "http://localhost:8000/api/v1/documents/doc123"
-```
-
-#### Download Document
-```bash
-GET /api/v1/documents/{document_id}/download
-
-curl "http://localhost:8000/api/v1/documents/doc123/download" -o document.pdf
-```
-
-#### Merge Document Tree
-```bash
-POST /api/v1/documents/{document_id}/merge-tree
-
-curl -X POST "http://localhost:8000/api/v1/documents/doc123/merge-tree"
-```
-
-#### Get Document Tree
-```bash
-GET /api/v1/documents/{document_id}/tree
-
-curl "http://localhost:8000/api/v1/documents/doc123/tree"
-```
-
-#### Get Document Tree from Path
-```bash
-GET /api/v1/documents/{document_id}/tree/path?path=/&depth=3&serialize=false
-
-curl "http://localhost:8000/api/v1/documents/doc123/tree/path?path=/introduction&depth=2"
-```
-
-#### Get Document Tree Statistics
-```bash
-GET /api/v1/documents/{document_id}/tree/stats
-
-curl "http://localhost:8000/api/v1/documents/doc123/tree/stats"
-```
-
-#### List Document Images
-```bash
-GET /api/v1/documents/{document_id}/visual_elements
-
-curl "http://localhost:8000/api/v1/documents/doc123/visual_elements"
-```
-
-### Query Processing
-
-#### Query Document (Streaming)
-```bash
-POST /api/v1/query/document/{document_id}
-Content-Type: application/json
-
-curl -X POST "http://localhost:8000/api/v1/query/document/doc123" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "query": "What is the main topic of this document?",
-       "user_id": "user123"
-     }' \
-     --no-buffer
 ```
 
 ## 🤖 AI Agent Capabilities
@@ -368,239 +249,34 @@ The AI agent has access to three powerful tools for comprehensive document analy
 - **Source Attribution**: Provides page numbers and section references
 - **Confidence Indicators**: Tool usage analytics indicate information reliability
 
-### User Management
-
-#### Create User
-```bash
-POST /api/v1/users/
-Content-Type: application/json
-
-curl -X POST "http://localhost:8000/api/v1/users/" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "email": "user@example.com",
-       "username": "johndoe",
-       "full_name": "John Doe",
-       "password": "securepassword"
-     }'
-```
-
-#### Get User Statistics
-```bash
-GET /api/v1/users/stats
-
-curl "http://localhost:8000/api/v1/users/stats"
-```
-
-#### Get User
-```bash
-GET /api/v1/users/{user_id}
-
-curl "http://localhost:8000/api/v1/users/user123"
-```
-
-#### List Users
-```bash
-GET /api/v1/users/?is_active=true&skip=0&limit=50
-
-curl "http://localhost:8000/api/v1/users/?is_active=true&limit=10"
-```
-
-#### Update User
-```bash
-PUT /api/v1/users/{user_id}
-Content-Type: application/json
-
-curl -X PUT "http://localhost:8000/api/v1/users/user123" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "full_name": "John Smith",
-       "is_active": true
-     }'
-```
-
-#### Delete User
-```bash
-DELETE /api/v1/users/{user_id}
-
-curl -X DELETE "http://localhost:8000/api/v1/users/user123"
-```
-
-#### User Login
-```bash
-POST /api/v1/users/{user_id}/login
-
-curl -X POST "http://localhost:8000/api/v1/users/user123/login"
-```
-
-#### Get User Activity
-```bash
-GET /api/v1/users/{user_id}/activity?days=30
-
-curl "http://localhost:8000/api/v1/users/user123/activity?days=7"
-```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-```bash
-# Application
-APP_NAME=Vectorless RAG
-APP_VERSION=1.0.0
-DEBUG=false
-
-# Server
-HOST=0.0.0.0
-PORT=8000
-WORKERS=4
-
-# MongoDB
-MONGODB_URL=mongodb://mongodb:27017
-MONGODB_DATABASE=vectorless_rag
-
-# Redis
-REDIS_URL=redis://redis:6379/0
-
-# MinIO
-MINIO_ENDPOINT=minio:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_SECURE=false
-
-# Gemini AI
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-1.5-flash
-
-# Processing
-MAX_FILE_SIZE=50
-MAX_PAGES_PER_DOCUMENT=100
-SUPPORTED_FORMATS=pdf
-
-# Cache
-CACHE_TTL=3600
-CACHE_MAX_SIZE=1000
-
-# Security
-SECRET_KEY=your_secret_key_here
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-```
-
-### Docker Compose Services
-
-- **backend**: FastAPI application (port 8000)
-- **mongodb**: MongoDB database (port 27017)
-- **redis**: Redis cache (port 6379)
-- **minio**: MinIO object storage (port 9000, 9001)
-- **minio-client**: MinIO bucket initialization
-
-
-## 📊 Monitoring and Logging
-
-### Structured Logging
-
-The system uses structured logging with contextual information:
-
-```python
-import structlog
-
-logger = structlog.get_logger()
-logger.info("Document processed", 
-           document_id="doc123", 
-           processing_time=5.2,
-           page_count=10)
-```
-
-### Health Checks
-
-```bash
-# Application health
-curl http://localhost:8000/health
-
-# Database health
-curl http://localhost:8000/health/database
-
-# Storage health
-curl http://localhost:8000/health/storage
-```
-
-### Metrics Endpoints
-
-```bash
-# Document statistics
-curl http://localhost:8000/api/v1/documents/stats
-
-# Tree statistics
-curl http://localhost:8000/api/v1/trees/stats
-
-# Query analytics
-curl http://localhost:8000/api/v1/queries/analytics/stats
-```
-
 ## 🔍 Development
-
-### Local Development Setup
-
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start external services
-docker-compose up -d mongodb redis minio
-
-# Run application locally
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
 
 ### Project Structure
 
 ```
-vectorless-rag/
+archivist/
 ├── app/
 │   ├── api/
 │   │   └── v1/
-│   │       ├── documents.py
-│   │       ├── trees.py
-│   │       ├── queries.py
-│   │       └── users.py
 │   ├── core/
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   ├── storage.py
-│   │   ├── cache.py
-│   │   └── exceptions.py
 │   ├── models/
-│   │   ├── document.py
-│   │   ├── tree.py
-│   │   ├── query.py
-│   │   └── user.py
 │   ├── services/
-│   │   ├── pdf_service.py
-│   │   ├── gemini_service.py
-│   │   ├── json_patch_service.py
-│   │   └── pydantic_ai_service.py
 │   └── main.py
-├── tests/
-│   ├── test_services.py
-│   └── test_api.py
-├── docker-compose.yml
+├── compose.yml
 ├── Dockerfile
-├── requirements.txt
+├── .env
+├── frontend.env
+├── pyproject.toml
+├── uv.lock
 └── README.md
 ```
 
-### Frontend
-1. Login page with email and password form and sign up link
-2. Sign up page with email, username, fullname, and password and sign up button then redirection to sign in page if signup success
-3. Home page with short explanation of the application concept with cards like "Start Uploading" "Start Querying" also sidebar for page navigation and profile card to show the username if clicked show option settings and log out
-4. Documents page with overall metrics on top and add new button, below is the table of document list with quick action button to view, download and delete
-5. Document view page to view the pdf and Document concept tree, 
-6. Chat interface with history management in sidebar, the chat will show the thought process and after result is fully received, there will be button to open a sheet to show the page navigating process, which is the tree navigated (i will give more detail when we are implementing this)
-7. User management only to show who are registered to the app
+### Hardware Minimum Specification
+- CPU: 1 cores
+- RAM: 2GB
+- Storage: 10GB SSD
 
-9. Settings page for changing theme and model used in query and indexing (Gemini 2.5 flash, Gemini 2.5 pro, or Gemini 2.5 flash lite)
+### Recommended Specification
+- CPU: 2 cores
+- RAM: 4GB
+- Storage: 20GB SSD
