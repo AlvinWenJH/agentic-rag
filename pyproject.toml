@@ -1,5 +1,5 @@
 [project]
-name = "vectorless-rag"
+name = "archivist"
 version = "0.1.0"
 description = "Vectorless RAG system using FastAPI and modern AI tools"
 readme = "README.md"
