@@ -25,7 +25,7 @@ from app.services.documents import (
 from app.core.database import get_documents_collection
 from app.core.exceptions import NotFoundError
 
-import mlflow
+# import mlflow
 import os
 import base64
 
@@ -176,6 +176,7 @@ class QueryService:
 
                 return ToolReturn(
                     return_value={
+                        "message": "You can call the `fetch_page_details` tool to get the image details for the visual element you deemed relevant",
                         "visual_elements": paginated_elements,
                         "total_count": total_count,
                         "returned_count": len(paginated_elements),
@@ -223,54 +224,54 @@ class QueryService:
         Returns:
             Serialized Tree starts from paths
         """
-        with mlflow.start_span(name="navigate_subtree", span_type="TOOL") as span:
-            span.set_inputs({"paths": paths, "depth": depth})
-            try:
-                # Add paths to context for tracking query journey
-                for path in paths:
-                    if path not in ctx.deps.query_paths:
-                        ctx.deps.query_paths.append(
-                            {
-                                "document_id": ctx.deps.document_id,
-                                "path": path,
-                                "depth": depth,
-                            }
-                        )
+        # with mlflow.start_span(name="navigate_subtree", span_type="TOOL") as span:
+        #     span.set_inputs({"paths": paths, "depth": depth})
+        try:
+            # Add paths to context for tracking query journey
+            for path in paths:
+                if path not in ctx.deps.query_paths:
+                    ctx.deps.query_paths.append(
+                        {
+                            "document_id": ctx.deps.document_id,
+                            "path": path,
+                            "depth": depth,
+                        }
+                    )
 
-                results = ""
-                for path in paths:
-                    try:
-                        subtree_data = await get_document_tree_from_path(
-                            ctx.deps.document_id, path, depth, serialize=True
-                        )
-                        for subtree in subtree_data:
-                            results += f"Path: {subtree['path']}\nName: {subtree['title']}\nSummary: {subtree['summary'][:300]}...\nPages: {','.join([str(p) for p in subtree['pages']])}\n\n"
-                        logger.info(
-                            "Retrieved subtree for path",
-                            document_id=ctx.deps.document_id,
-                            path=path,
-                            depth=depth,
-                        )
-                    except Exception as e:
-                        logger.error(
-                            "Failed to get subtree for path",
-                            document_id=ctx.deps.document_id,
-                            path=path,
-                            error=str(e),
-                        )
-                        results = "Failed to retrieve path {path}: {str(e)}"
-                    # print("Fetch subtrees: ", flush=True)
-                    # print(results, flush=True)
-                span.set_outputs({"result": results})
-                return ToolReturn(return_value=results)
-            except Exception as e:
-                logger.error(
-                    "Error in get_subtree_by_paths tool",
-                    document_id=ctx.deps.document_id,
-                    paths=paths,
-                    error=str(e),
-                )
-                raise f"Failed to get subtree data: {str(e)}"
+            results = ""
+            for path in paths:
+                try:
+                    subtree_data = await get_document_tree_from_path(
+                        ctx.deps.document_id, path, depth, serialize=True
+                    )
+                    for subtree in subtree_data:
+                        results += f"Path: {subtree['path']}\nName: {subtree['title']}\nSummary: {subtree['summary'][:300]}...\nPages: {','.join([str(p) for p in subtree['pages']])}\n\n"
+                    logger.info(
+                        "Retrieved subtree for path",
+                        document_id=ctx.deps.document_id,
+                        path=path,
+                        depth=depth,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to get subtree for path",
+                        document_id=ctx.deps.document_id,
+                        path=path,
+                        error=str(e),
+                    )
+                    results = "Failed to retrieve path {path}: {str(e)}"
+                # print("Fetch subtrees: ", flush=True)
+                # print(results, flush=True)
+            # span.set_outputs({"result": results})
+            return ToolReturn(return_value=results)
+        except Exception as e:
+            logger.error(
+                "Error in get_subtree_by_paths tool",
+                document_id=ctx.deps.document_id,
+                paths=paths,
+                error=str(e),
+            )
+            raise f"Failed to get subtree data: {str(e)}"
 
     async def _fetch_page_details(
         self, ctx: RunContext[QueryDependencies], pages: List[int] = []
@@ -284,154 +285,153 @@ class QueryService:
         Returns:
             Analysis results from Gemini for the requested pages
         """
-        with mlflow.start_span(name="fetch_page_details", span_type="TOOL") as span:
-            span.set_inputs({"pages": pages})
-            try:
-                query = ctx.deps.query
-                document_id = ctx.deps.document_id
+        # with mlflow.start_span(name="fetch_page_details", span_type="TOOL") as span:
+        # span.set_inputs({"pages": pages})
+        try:
+            query = ctx.deps.query
+            document_id = ctx.deps.document_id
 
-                if not pages:
-                    return ToolReturn(
-                        return_value="No pages specified. Please provide page numbers to analyze."
-                    )
-
-                logger.info(
-                    "Fetching page details for analysis",
-                    document_id=document_id,
-                    pages=pages,
-                    query=query,
+            if not pages:
+                return ToolReturn(
+                    return_value="No pages specified. Please provide page numbers to analyze."
                 )
 
-                # Get page images using the get_document_page function
-                pages_data = await get_document_page(document_id, pages)
+            logger.info(
+                "Fetching page details for analysis",
+                document_id=document_id,
+                pages=pages,
+                query=query,
+            )
 
-                if not pages_data:
-                    return ToolReturn(
-                        return_value="No page images could be retrieved for the specified pages."
+            # Get page images using the get_document_page function
+            pages_data = await get_document_page(document_id, pages)
+
+            if not pages_data:
+                return ToolReturn(
+                    return_value="No page images could be retrieved for the specified pages."
+                )
+
+            # Analyze each page with Gemini
+            analysis_results = []
+            total_usage = {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "total_calls": 0,
+            }
+            prompt = f"""
+            Analyze this page image from the document and provide detailed concise information that could help answer the following query: "{query}"
+            Focus on information that would be useful for answering the user
+            """
+            image_bytes_list = []
+            for page_key, base64_image in pages_data.items():
+                if base64_image is None:
+                    analysis_results.append(
+                        {
+                            "page": page_key,
+                            "error": "Image not available for this page",
+                        }
+                    )
+                    continue
+
+                try:
+                    # Convert base64 back to bytes for BinaryContent
+                    image_bytes_list.append(base64.b64decode(base64_image))
+                except Exception as e:
+                    logger.error(
+                        "Failed to fetch page image data",
+                        document_id=document_id,
+                        page=page_key,
+                        error=str(e),
                     )
 
-                # Analyze each page with Gemini
-                analysis_results = []
-                total_usage = {
-                    "input_tokens": 0,
-                    "output_tokens": 0,
-                    "total_tokens": 0,
-                    "total_calls": 0,
+            # Prepare content for Pydantic AI
+            image_contents = [
+                BinaryContent(data=i, media_type="image/png") for i in image_bytes_list
+            ]
+            content = [
+                prompt,
+                *image_contents,
+            ]
+            # provider = GoogleProvider(api_key=os.getenv("GEMINI_API_KEY"))
+            # model = GoogleModel("gemini-2.5-flash", provider=provider)
+            # agent = Agent(model)
+            # Run analysis with Gemini 2.5 Flash
+            logger.info(
+                "Starting page analysis",
+                document_id=document_id,
+                pages=pages,
+                query=query,
+            )
+            agent = Agent(self.model)
+            result = await agent.run(
+                content,
+                deps=ctx.deps,
+                model_settings=GoogleModelSettings(
+                    max_tokens=int(1000 * len(image_contents)),
+                    google_thinking_config={"thinkingBudget": 512},
+                ),
+            )
+
+            # Track token usage
+            usage = result.usage()
+            tool_usage = usage.__dict__
+
+            analysis_results.append(
+                {
+                    "page": page_key,
+                    "analysis": result.output,
+                    "usage": tool_usage,
                 }
-                prompt = f"""
-                Analyze this page image from the document and provide detailed concise information that could help answer the following query: "{query}"
-                Focus on information that would be useful for answering the user
-                """
-                image_bytes_list = []
-                for page_key, base64_image in pages_data.items():
-                    if base64_image is None:
-                        analysis_results.append(
-                            {
-                                "page": page_key,
-                                "error": "Image not available for this page",
-                            }
-                        )
-                        continue
+            )
 
-                    try:
-                        # Convert base64 back to bytes for BinaryContent
-                        image_bytes_list.append(base64.b64decode(base64_image))
-                    except Exception as e:
-                        logger.error(
-                            "Failed to fetch page image data",
-                            document_id=document_id,
-                            page=page_key,
-                            error=str(e),
-                        )
+            logger.info(
+                "Page analysis completed",
+                document_id=document_id,
+                page=page_key,
+                tokens_used=usage.total_tokens,
+            )
 
-                # Prepare content for Pydantic AI
-                image_contents = [
-                    BinaryContent(data=i, media_type="image/png")
-                    for i in image_bytes_list
-                ]
-                content = [
-                    prompt,
-                    *image_contents,
-                ]
-                # provider = GoogleProvider(api_key=os.getenv("GEMINI_API_KEY"))
-                # model = GoogleModel("gemini-2.5-flash", provider=provider)
-                # agent = Agent(model)
-                # Run analysis with Gemini 2.5 Flash
-                logger.info(
-                    "Starting page analysis",
-                    document_id=document_id,
-                    pages=pages,
-                    query=query,
-                )
-                agent = Agent(self.model)
-                result = await agent.run(
-                    content,
-                    deps=ctx.deps,
-                    model_settings=GoogleModelSettings(
-                        max_tokens=int(1000 * len(image_contents)),
-                        google_thinking_config={"thinkingBudget": 512},
-                    ),
-                )
+            # Save total usage to deps.tool_usage
+            ctx.deps.tool_usage["fetch_page_details"] = tool_usage
 
-                # Track token usage
-                usage = result.usage()
-                tool_usage = usage.__dict__
+            logger.info(
+                "Page details fetch completed",
+                document_id=document_id,
+                total_pages_analyzed=len(
+                    [r for r in analysis_results if "analysis" in r]
+                ),
+                total_usage=total_usage,
+            )
+            # span.set_outputs(
+            #     {
+            #         "result": "\n\n".join(
+            #             [
+            #                 f"Page {pages[i]}\n" + res.get("analysis")
+            #                 for i, res in enumerate(analysis_results)
+            #             ]
+            #         ),
+            #         "token_usage": usage.__dict__,
+            #     }
+            # )
+            for page in pages:
+                if {
+                    "document_id": document_id,
+                    "page": page,
+                } not in ctx.deps.retrieved_pages:
+                    ctx.deps.retrieved_pages.append(
+                        {"document_id": document_id, "page": page}
+                    )
+            return ToolReturn(return_value=analysis_results)
 
-                analysis_results.append(
-                    {
-                        "page": page_key,
-                        "analysis": result.output,
-                        "usage": tool_usage,
-                    }
-                )
-
-                logger.info(
-                    "Page analysis completed",
-                    document_id=document_id,
-                    page=page_key,
-                    tokens_used=usage.total_tokens,
-                )
-
-                # Save total usage to deps.tool_usage
-                ctx.deps.tool_usage["fetch_page_details"] = tool_usage
-
-                logger.info(
-                    "Page details fetch completed",
-                    document_id=document_id,
-                    total_pages_analyzed=len(
-                        [r for r in analysis_results if "analysis" in r]
-                    ),
-                    total_usage=total_usage,
-                )
-                span.set_outputs(
-                    {
-                        "result": "\n\n".join(
-                            [
-                                f"Page {pages[i]}\n" + res.get("analysis")
-                                for i, res in enumerate(analysis_results)
-                            ]
-                        ),
-                        "token_usage": usage.__dict__,
-                    }
-                )
-                for page in pages:
-                    if {
-                        "document_id": document_id,
-                        "page": page,
-                    } not in ctx.deps.retrieved_pages:
-                        ctx.deps.retrieved_pages.append(
-                            {"document_id": document_id, "page": page}
-                        )
-                return ToolReturn(return_value=analysis_results)
-
-            except Exception as e:
-                logger.error(
-                    "Failed to fetch page details",
-                    document_id=ctx.deps.document_id,
-                    pages=pages,
-                    error=str(e),
-                )
-                raise f"Failed to fetch document page images: {str(e)}"
+        except Exception as e:
+            logger.error(
+                "Failed to fetch page details",
+                document_id=ctx.deps.document_id,
+                pages=pages,
+                error=str(e),
+            )
+            raise f"Failed to fetch document page images: {str(e)}"
 
     async def query_doc(
         self, document_id: str, query: str, user_id: Optional[str] = None
@@ -489,44 +489,42 @@ class QueryService:
             }
 
             # Stream the agent response
-            with mlflow.start_span(name="Query") as span:
-                span.set_inputs({"query": query, "deps": deps.__dict__})
-                async for event in self.agent.run_stream_events(query, deps=deps):
-                    # print(f"Received Event: {event}", flush=True)
-                    # # Convert Pydantic AI events to our format
-                    if isinstance(event, PartStartEvent):
-                        if hasattr(event, "part"):
-                            event_part = event.part
-                            if hasattr(event_part, "content") and event_part.content:
-                                yield {
-                                    "type": "text_delta",
-                                    "content": event_part.content,
-                                }
-                    if isinstance(event, FunctionToolCallEvent):
-                        if hasattr(event, "part"):
-                            event_part = event.part
-                            if hasattr(event_part, "tool_name"):
-                                yield {
-                                    "type": "tool_call",
-                                    "content": f"Calling {event_part.tool_name}",
-                                    "tool_args": event_part.args
-                                    if event_part.args
-                                    else {},
-                                }
-                    if isinstance(event, AgentRunResultEvent):
-                        yield {
-                            "type": "final_result",
-                            "content": event.result.output,
-                            "references": deps.__dict__,
-                            "usage": event.result.usage().__dict__,
-                        }
-                span.set_outputs(
-                    {
-                        "output": event.result.output,
+            # with mlflow.start_span(name="Query") as span:
+            # span.set_inputs({"query": query, "deps": deps.__dict__})
+            async for event in self.agent.run_stream_events(query, deps=deps):
+                # print(f"Received Event: {event}", flush=True)
+                # # Convert Pydantic AI events to our format
+                if isinstance(event, PartStartEvent):
+                    if hasattr(event, "part"):
+                        event_part = event.part
+                        if hasattr(event_part, "content") and event_part.content:
+                            yield {
+                                "type": "text_delta",
+                                "content": event_part.content,
+                            }
+                if isinstance(event, FunctionToolCallEvent):
+                    if hasattr(event, "part"):
+                        event_part = event.part
+                        if hasattr(event_part, "tool_name"):
+                            yield {
+                                "type": "tool_call",
+                                "content": f"Calling {event_part.tool_name}",
+                                "tool_args": event_part.args if event_part.args else {},
+                            }
+                if isinstance(event, AgentRunResultEvent):
+                    yield {
+                        "type": "final_result",
+                        "content": event.result.output,
                         "references": deps.__dict__,
                         "usage": event.result.usage().__dict__,
                     }
-                )
+            # span.set_outputs(
+            #     {
+            #         "output": event.result.output,
+            #         "references": deps.__dict__,
+            #         "usage": event.result.usage().__dict__,
+            #     }
+            # )
             logger.info(
                 "Completed document query",
                 document_id=document_id,

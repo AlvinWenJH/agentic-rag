@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
-import mlflow
+# import mlflow
 
 import structlog
 import logging
@@ -22,13 +22,13 @@ from app.api.router import api_router
 from app.core.exceptions import VectorlessRAGException
 from app.services.gemini_service import gemini_service
 from app.services.tree_merger_service import tree_merger_service
-import os
+# import os
 
 
-os.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://minio:9000"
+# os.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://minio:9000"
 
-mlflow.set_tracking_uri("http://mlflow:5000")
-mlflow.set_experiment("PydanticAI")
+# mlflow.set_tracking_uri("http://mlflow:5000")
+# mlflow.set_experiment("PydanticAI")
 
 # mlflow.pydantic_ai.autolog()
 

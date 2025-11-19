@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getBackendUrl } from "@/lib/env"
 import { Settings, Hash, BarChart3, Cpu, Database, Send as SendIcon, Bot, FileText, ZoomOut, ZoomIn, RefreshCcw } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Spinner } from "@/components/ui/spinner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -34,10 +35,12 @@ type ChatMessage = {
 
 export default function ChatPane() {
   const backendUrl = getBackendUrl()
-  const [mode, setMode] = React.useState<"document" | "collection">("document")
+  const [mode, setMode] = React.useState<"document">("document")
   const [docs, setDocs] = React.useState<DocumentItem[]>([])
   const [loadingDocs, setLoadingDocs] = React.useState(true)
   const [selected, setSelected] = React.useState<DocumentItem | null>(null)
+  const [selectedDetail, setSelectedDetail] = React.useState<{ id: string; title?: string; description?: string; file_size?: number } | null>(null)
+  const [docQuery, setDocQuery] = React.useState("")
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
   const [input, setInput] = React.useState("")
   const [isStreaming, setIsStreaming] = React.useState(false)
@@ -85,6 +88,24 @@ export default function ChatPane() {
     }
   }, [backendUrl])
 
+  const loadSelectedDetail = React.useCallback(async () => {
+    if (!selected?.id) { setSelectedDetail(null); return }
+    try {
+      const res = await fetch(`${backendUrl}/api/v1/documents/${encodeURIComponent(selected.id)}`, {
+        headers: { accept: "application/json" },
+      })
+      const data = await res.json().catch(() => ({}))
+      setSelectedDetail({ id: selected.id, title: data?.title ?? data?.filename ?? selected.title ?? selected.filename ?? selected.id, description: data?.description, file_size: Number(data?.file_size ?? data?.metadata?.file_size ?? 0) })
+    } catch {
+      setSelectedDetail({ id: selected.id, title: selected.title ?? selected.filename ?? selected.id, description: undefined, file_size: undefined })
+    }
+  }, [backendUrl, selected?.id])
+
+  React.useEffect(() => {
+    setSelectedDetail(null)
+    if (selected?.id) loadSelectedDetail()
+  }, [loadSelectedDetail, selected?.id])
+
   React.useEffect(() => {
     if (!scrollRef.current) return
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -92,6 +113,16 @@ export default function ChatPane() {
 
   function labelFor(doc: DocumentItem): string {
     return doc.title || doc.filename || doc.id
+  }
+
+  function formatBytes(bytes?: number | null) {
+    const b = typeof bytes === "number" ? bytes : 0
+    if (b < 1024) return `${b} B`
+    const u = ["KB", "MB", "GB", "TB"]
+    let i = -1
+    let v = b
+    do { v /= 1024; i++ } while (v >= 1024 && i < u.length - 1)
+    return `${v.toFixed(1)} ${u[i]}`
   }
 
   function mergeTrees(a: any, b: any): any {
@@ -392,7 +423,7 @@ export default function ChatPane() {
                             References
                           </Button>
                         </SheetTrigger>
-                        <SheetContent side="right" className="w-[420px] sm:w-[520px]">
+                        <SheetContent side="right" className="w-[504px] sm:w-[624px] sm:max-w-[624px]">
                           <SheetHeader>
                             <SheetTitle>References</SheetTitle>
                           </SheetHeader>
@@ -549,29 +580,58 @@ export default function ChatPane() {
       <div className="sticky bottom-0 z-10 bg-background border-t p-2">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
-                <Settings className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
+            {selected ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" aria-label="Selected Document" onMouseEnter={() => { if (!selectedDetail) loadSelectedDetail() }}>
+                      <FileText className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[320px]">
+                  <div className="flex items-start gap-2">
+                    <FileText className="size-4" />
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{selectedDetail?.title || labelFor(selected)}</div>
+                      <div className="mt-1 text-xs text-balance text-background">{selectedDetail?.description || "No description"}</div>
+                      <div className="mt-1 text-xs">{selectedDetail?.file_size !== undefined ? `Size ${formatBytes(selectedDetail?.file_size)}` : null}</div>
+                    </div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" aria-label="Settings">
+                  <Settings className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+            )}
             <DropdownMenuContent className="w-80">
-              <DropdownMenuLabel>Mode</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setMode("document")}>Document</DropdownMenuItem>
-              <DropdownMenuItem disabled>Collection (coming soon)</DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuLabel>Document</DropdownMenuLabel>
+              <div className="p-2">
+                <Input placeholder="Search document..." value={docQuery} onChange={(e) => setDocQuery(e.target.value)} />
+              </div>
               <DropdownMenuSeparator />
               {loadingDocs ? (
                 <DropdownMenuItem disabled>Loading documents...</DropdownMenuItem>
               ) : docs.length === 0 ? (
                 <DropdownMenuItem disabled>No documents</DropdownMenuItem>
               ) : (
-                docs.map((d) => (
-                  <DropdownMenuItem key={d.id} onClick={() => setSelected(d)}>
-                    {labelFor(d)}
-                  </DropdownMenuItem>
-                ))
+                (() => {
+                  const q = docQuery.trim().toLowerCase()
+                  const filtered = q ? docs.filter((d) => (labelFor(d) || "").toLowerCase().includes(q)) : docs
+                  if (filtered.length === 0) return <DropdownMenuItem disabled>No results</DropdownMenuItem>
+                  return (
+                    <div className="max-h-64 overflow-auto">
+                      {filtered.map((d) => (
+                        <DropdownMenuItem key={d.id} onClick={() => { setSelected(d); setDocQuery(""); }}>
+                          {labelFor(d)}
+                        </DropdownMenuItem>
+                      ))}
+                    </div>
+                  )
+                })()
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -589,9 +649,7 @@ export default function ChatPane() {
             <Button type="button" variant="outline" onClick={cancelStream}>Stop</Button>
           ) : null}
         </form>
-        {selected ? (
-          <div className="mt-2 text-xs text-muted-foreground">Target: {labelFor(selected)}</div>
-        ) : null}
+
       </div>
     </div>
   )

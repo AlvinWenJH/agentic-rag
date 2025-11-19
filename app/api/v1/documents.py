@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Query
 from fastapi.responses import StreamingResponse
 import structlog
+import json
 from datetime import datetime, timedelta
 import io
 from bson import ObjectId
@@ -29,6 +30,7 @@ from app.core.database import get_documents_collection
 from app.core.storage import upload_file_data, download_file_data
 from app.core.exceptions import NotFoundError, ValidationError, ProcessingError
 from app.core.config import get_settings
+from app.core.cache import get_cache_client
 
 
 logger = structlog.get_logger()
@@ -148,10 +150,15 @@ async def process_document_background(document_id: str, file_content: bytes):
         logger.info("Starting background document processing", document_id=document_id)
         start_time = datetime.utcnow()
         documents_collection = get_documents_collection()
+        channel = f"status:document:{document_id}"
+        try:
+            client = get_cache_client()
+        except Exception:
+            client = None
 
         # Update status to processing
         await documents_collection.update_one(
-            {"_id": document_id},
+            {"_id": ObjectId(document_id)},
             {
                 "$set": {
                     "status": DocumentStatus.PROCESSING,
@@ -160,14 +167,46 @@ async def process_document_background(document_id: str, file_content: bytes):
             },
         )
 
+        if client:
+            _msg = json.dumps(
+                {
+                    "type": "processing_started",
+                    "resource_type": "document",
+                    "resource_id": document_id,
+                    "status": DocumentStatus.PROCESSING.value,
+                    "current_step": "processing",
+                    "progress": 0,
+                }
+            )
+            logger.info("Sending message : " + _msg)
+            await client.publish(channel, _msg)
+
         # Convert PDF to images
         image_paths, page_count = await pdf_service.convert_pdf_to_images(
             pdf_data=file_content, document_id=document_id
         )
 
+        if client:
+            _msg = json.dumps(
+                {
+                    "type": "pdf_converted",
+                    "resource_type": "document",
+                    "resource_id": document_id,
+                    "status": DocumentStatus.PROCESSING.value,
+                    "current_step": "image_generation",
+                    "progress": 25,
+                    "data": {
+                        "page_count": page_count,
+                        "image_paths_count": len(image_paths),
+                    },
+                }
+            )
+            logger.info("Sending message : " + _msg)
+            await client.publish(channel, _msg)
+
         # Update with image paths
         await documents_collection.update_one(
-            {"_id": document_id}, {"$set": {"image_paths": image_paths}}
+                {"_id": ObjectId(document_id)}, {"$set": {"image_paths": image_paths}}
         )
 
         # Generate topic tree using Gemini
@@ -180,31 +219,76 @@ async def process_document_background(document_id: str, file_content: bytes):
         if not document:
             raise ProcessingError(f"Document {document_id} not found during processing")
 
+        if client:
+            _msg = json.dumps(
+                {
+                    "type": "analysis_started",
+                    "resource_type": "document",
+                    "resource_id": document_id,
+                    "status": DocumentStatus.PROCESSING.value,
+                    "current_step": "gemini_analysis",
+                    "progress": 50,
+                }
+            )
+            logger.info("Sending message : " + _msg)
+            await client.publish(channel, _msg)
+
         tree_analysis = await gemini_service.analyze_document_images(
             image_paths=image_paths,
             document_id=document_id,
             document_title=document.get("title", ""),
         )
 
-        # # Update document with processing results
-        # await documents_collection.update_one(
-        #     {"_id": document_id},
-        #     {
-        #         "$set": {
-        #             "status": DocumentStatus.PROCESSED,
-        #             "processing_completed": datetime.utcnow(),
-        #             "processing_time": tree_analysis["processing_time"],
-        #             "tree_data": tree_analysis["tree_data"],
-        #             "analysis_metadata": tree_analysis,
-        #         }
-        #     },
-        # )
+        if client:
+            _msg = json.dumps(
+                {
+                    "type": "analysis_completed",
+                    "resource_type": "document",
+                    "resource_id": document_id,
+                    "status": DocumentStatus.PROCESSING.value,
+                    "current_step": "gemini_analysis",
+                    "progress": 75,
+                }
+            )
+            logger.info("Sending message : " + _msg)
+            await client.publish(channel, _msg)
+
+        # Start Merging Nodes
+        await merge_tree_background(document_id)
+
+        if client:
+            _msg = json.dumps(
+                {
+                    "type": "merge_completed",
+                    "resource_type": "document",
+                    "resource_id": document_id,
+                    "status": DocumentStatus.PROCESSING.value,
+                    "current_step": "tree_merging",
+                    "progress": 90,
+                }
+            )
+            logger.info("Sending message : " + _msg)
+            await client.publish(channel, _msg)
 
         logger.info(
             "Document processing completed",
             document_id=document_id,
             processing_time=(datetime.utcnow() - start_time).total_seconds(),
         )
+
+        if client:
+            _msg = json.dumps(
+                {
+                    "type": "processing_completed",
+                    "resource_type": "document",
+                    "resource_id": document_id,
+                    "status": DocumentStatus.COMPLETED.value,
+                    "current_step": "completed",
+                    "progress": 100,
+                }
+            )
+            logger.info("Sending message : " + _msg)
+            await client.publish(channel, _msg)
 
     except Exception as e:
         logger.error(
@@ -214,7 +298,7 @@ async def process_document_background(document_id: str, file_content: bytes):
         # Update status to failed
         documents_collection = get_documents_collection()
         await documents_collection.update_one(
-            {"_id": document_id},
+            {"_id": ObjectId(document_id)},
             {
                 "$set": {
                     "status": DocumentStatus.FAILED,
@@ -223,6 +307,24 @@ async def process_document_background(document_id: str, file_content: bytes):
                 }
             },
         )
+
+        try:
+            if client:
+                _msg = json.dumps(
+                    {
+                        "type": "processing_failed",
+                        "resource_type": "document",
+                        "resource_id": document_id,
+                        "status": DocumentStatus.FAILED.value,
+                        "current_step": "failed",
+                        "progress": None,
+                        "error": str(e),
+                    }
+                )
+                logger.info("Sending message : " + _msg)
+                await client.publish(channel, _msg)
+        except Exception:
+            pass
 
 
 @router.get("/stats", response_model=DocumentStats)

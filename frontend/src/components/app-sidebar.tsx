@@ -60,11 +60,7 @@ const data: { user: NavUser, navMain: NavMainItem[] } = {
                     url: "/documents",
                     icon: FileText,
                 },
-                {
-                    title: "Collection",
-                    url: "/collection",
-                    icon: Folder,
-                },
+
             ],
         },
         {
@@ -77,8 +73,13 @@ const data: { user: NavUser, navMain: NavMainItem[] } = {
                     url: "/query",
                     icon: MessageSquare,
                 },
+                {
+                    title: "Document Analysis",
+                    url: "/analysis",
+                    icon: FileText,
+                }
             ],
-        },
+        }
     ],
 }
 

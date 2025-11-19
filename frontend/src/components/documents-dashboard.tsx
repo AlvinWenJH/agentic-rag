@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { getBackendUrl } from "@/lib/env"
+import { Spinner } from "@/components/ui/spinner"
+import { toast } from "sonner"
 
 type DocumentItem = {
   id: string
@@ -79,6 +81,98 @@ export default function DocumentsDashboard() {
     fetchAll()
   }, [])
 
+  React.useEffect(() => {
+    const ids = Array.isArray(docs) ? docs.map((d) => d.id).filter(Boolean) : []
+    if (ids.length === 0) return
+
+    function buildWsUrl(channels: string[]): string {
+      const origin = backendUrl
+      try {
+        const base = new URL(origin)
+        const proto = base.protocol === "https:" ? "wss" : "ws"
+        const qs = new URLSearchParams({ channels: channels.join(",") })
+        return `${proto}://${base.host}/api/v1/ws/status?${qs.toString()}`
+      } catch {
+        const proto = origin.startsWith("https") ? "wss" : "ws"
+        const host = origin.replace(/^https?:\/\//, "")
+        const qs = new URLSearchParams({ channels: channels.join(",") })
+        return `${proto}://${host}/api/v1/ws/status?${qs.toString()}`
+      }
+    }
+
+    function normalizeStatus(v?: string): string | undefined {
+      if (!v) return v
+      const s = String(v).toLowerCase()
+      if (s.includes("documentstatus.")) {
+        return s.split(".").pop()
+      }
+      return s
+    }
+
+    const channels = Array.from(new Set(ids.map((id) => `status:document:${id}`)))
+    const wsUrl = buildWsUrl(channels)
+    const ws = new WebSocket(wsUrl)
+
+    ws.onmessage = async (evt) => {
+      let payload: any = null
+      try {
+        payload = JSON.parse(evt.data)
+      } catch {
+        payload = null
+      }
+      if (!payload) return
+      const rid = payload?.resource_id ?? payload?.document_id
+      if (!rid) return
+      const status = normalizeStatus(payload?.status)
+
+      setDocs((prev) => {
+        const next = prev.map((d) => {
+          if (d.id !== rid) return d
+          return {
+            ...d,
+            status: status ?? d.status,
+            updated_at: new Date().toISOString(),
+            error_message: payload?.error ?? d.error_message,
+          }
+        })
+        return next
+      })
+
+      if (payload?.type === "processing_completed" || payload?.type === "processing_failed") {
+        if (payload?.type === "processing_completed") {
+          try {
+            const name = (() => {
+              const d = docs.find((x) => x.id === rid)
+              return d?.filename || d?.title || rid
+            })()
+            toast.success("Document processing complete", {
+              description: name,
+              action: {
+                label: "View",
+                onClick: () => {
+                  try { window.location.href = `/documents/${encodeURIComponent(rid)}` } catch { }
+                },
+              },
+            })
+          } catch { }
+        }
+        try {
+          const sRes = await fetch(`${backendUrl}/api/v1/documents/stats`, { headers: { accept: "application/json" } })
+          const sJson = await sRes.json().catch(() => ({}))
+          setStats(sJson ?? null)
+        } catch { }
+      }
+    }
+
+    ws.onopen = () => { }
+    ws.onerror = () => { }
+    ws.onclose = () => { }
+
+    return () => {
+      try { ws.close() } catch { }
+    }
+  }, [backendUrl, docs.map((d) => d.id).join(",")])
+
   async function downloadDocument(doc: DocumentItem) {
     try {
       const name = doc.filename || doc.title || `${doc.id}.bin`
@@ -120,7 +214,7 @@ export default function DocumentsDashboard() {
           const data = await res.json().catch(() => ({}))
           if (data?.detail) message = Array.isArray(data.detail) ? data.detail[0]?.msg ?? message : data.detail
           if (data?.message) message = data.message
-        } catch (_) {}
+        } catch (_) { }
         throw new Error(message)
       }
       // Optimistically update list
@@ -195,7 +289,7 @@ export default function DocumentsDashboard() {
           const data = await res.json().catch(() => ({}))
           if (data?.detail) message = Array.isArray(data.detail) ? data.detail[0]?.msg ?? message : data.detail
           if (data?.message) message = data.message
-        } catch (_) {}
+        } catch (_) { }
         throw new Error(message)
       }
 
@@ -376,7 +470,11 @@ export default function DocumentsDashboard() {
                       </td>
                       <td className="py-3 px-2">
                         <span className="rounded bg-muted px-2 py-0.5 text-xs capitalize inline-flex items-center gap-1">
-                          <StatusIcon status={doc.status} />
+                          {((doc.status ?? "").toLowerCase() === "processing") ? (
+                            <Spinner className="size-3" />
+                          ) : (
+                            <StatusIcon status={doc.status} />
+                          )}
                           {doc.status ?? "unknown"}
                         </span>
                       </td>

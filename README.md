@@ -27,8 +27,8 @@ The Achivist system revolutionizes document processing by:
 
 ```
 PDF Upload → Image Conversion → Visual Analysis → Topic Tree → Query Processing
-     ↓              ↓               ↓              ↓            ↓
-  Validation    PyMuPDF        Gemini Flash    MongoDB    Pydantic AI
+     ↓              ↓               ↓                ↓                ↓
+  Validation    PyMuPDF         Gemini Flash      MongoDB         Pydantic AI
 ```
 
 ## 🛠️ Technology Stack
@@ -58,7 +58,7 @@ PDF Upload → Image Conversion → Visual Analysis → Topic Tree → Query Pro
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd vectorless-rag
+cd agentic-rag
 
 # Copy environment template
 cp .env.example .env
@@ -211,7 +211,7 @@ curl -X POST "http://localhost:8000/api/v1/query/document/doc123" \
 
 ## 🤖 AI Agent Capabilities
 
-The Vectorless RAG system features a sophisticated AI agent powered by **Pydantic AI** and **Google Gemini 2.5 Flash** that provides intelligent document querying without traditional vector embeddings. The agent uses a tool-based approach to navigate and analyze documents dynamically.
+The Agentic RAG system features a sophisticated AI agent powered by **Pydantic AI** and **Google Gemini 2.5 Flash** that provides intelligent document querying without traditional vector embeddings. The agent uses a tool-based approach to navigate and analyze documents dynamically.
 
 ### 🧠 Core Agent Features
 
@@ -225,7 +225,7 @@ The Vectorless RAG system features a sophisticated AI agent powered by **Pydanti
 
 The AI agent has access to three powerful tools for comprehensive document analysis:
 
-##### 1. **Document Tree Navigation** (`get_subtree_by_paths`)
+##### 1. **Document Tree Navigation** (`navigate_document`)
 - **Purpose**: Navigate hierarchical document structure intelligently
 - **Capabilities**:
   - Explore document sections by nodes' path
@@ -243,7 +243,7 @@ The AI agent has access to three powerful tools for comprehensive document analy
   - Token usage tracking and optimization
 - **Use Cases**: Analyzing charts, reading tables, extracting specific data, understanding visual content
 
-##### 3. **Visual Elements Search** (`fetch_document_visual_elements`)
+##### 3. **Visual Elements Search** (`list_detected_document_visual_elements`)
 - **Purpose**: Search and filter document visual elements by keywords
 - **Capabilities**:
   - Keyword-based filtering across titles, summaries, and element types
