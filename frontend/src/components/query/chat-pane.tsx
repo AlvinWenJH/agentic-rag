@@ -383,12 +383,12 @@ export default function ChatPane() {
                         <Bot className="size-4" />
                       </AvatarFallback>
                     </Avatar>
-                    <div className="max-w-[80%]">
+                    <div className="max-w-[75vw]">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                     </div>
                   </div>
                 ) : m.role === "user" ? (
-                  <div className="self-end max-w-[80%] rounded-lg bg-primary text-primary-foreground px-3 py-2">
+                  <div className="self-end max-w-[75vw] rounded-lg bg-primary text-primary-foreground px-3 py-2">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                   </div>
                 ) : (
