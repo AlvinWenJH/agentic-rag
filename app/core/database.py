@@ -104,3 +104,13 @@ def get_queries_collection():
 def get_tree_collection():
     """Get tree collection."""
     return get_database().tree
+
+
+def get_analysis_collection():
+    """Get analysis collection."""
+    return get_database().analysis
+
+
+def get_analysis_results_collection():
+    """Get analysis_results collection."""
+    return get_database().analysis_results
