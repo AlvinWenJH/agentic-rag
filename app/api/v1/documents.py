@@ -206,7 +206,7 @@ async def process_document_background(document_id: str, file_content: bytes):
 
         # Update with image paths
         await documents_collection.update_one(
-                {"_id": ObjectId(document_id)}, {"$set": {"image_paths": image_paths}}
+            {"_id": ObjectId(document_id)}, {"$set": {"image_paths": image_paths}}
         )
 
         # Generate topic tree using Gemini
@@ -333,21 +333,31 @@ async def get_document_stats():
     try:
         documents_collection = get_documents_collection()
 
+        # Define filter for non-deleted documents
+        match_filter = {"is_deleted": {"$ne": True}}
+
         # Get counts by status
-        status_pipeline = [{"$group": {"_id": "$status", "count": {"$sum": 1}}}]
+        status_pipeline = [
+            {"$match": match_filter},
+            {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+        ]
         status_counts = {}
         async for result in documents_collection.aggregate(status_pipeline):
             status_counts[result["_id"]] = result["count"]
 
         # Get counts by document type
-        type_pipeline = [{"$group": {"_id": "$document_type", "count": {"$sum": 1}}}]
+        type_pipeline = [
+            {"$match": match_filter},
+            {"$group": {"_id": "$document_type", "count": {"$sum": 1}}},
+        ]
         type_counts = {}
         async for result in documents_collection.aggregate(type_pipeline):
             type_counts[result["_id"]] = result["count"]
 
         # Get total file size
         file_size_pipeline = [
-            {"$group": {"_id": None, "total_size": {"$sum": "$file_size"}}}
+            {"$match": match_filter},
+            {"$group": {"_id": None, "total_size": {"$sum": "$file_size"}}},
         ]
         file_size_result = await documents_collection.aggregate(
             file_size_pipeline
@@ -356,13 +366,17 @@ async def get_document_stats():
 
         # Get recent uploads (last 24 hours)
         twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
+        recent_uploads_filter = match_filter.copy()
+        recent_uploads_filter["created_at"] = {"$gte": twenty_four_hours_ago}
         recent_uploads = await documents_collection.count_documents(
-            {"created_at": {"$gte": twenty_four_hours_ago}}
+            recent_uploads_filter
         )
 
         # Get average processing time
+        processing_time_filter = match_filter.copy()
+        processing_time_filter["processing_time"] = {"$exists": True, "$ne": None}
         processing_time_pipeline = [
-            {"$match": {"processing_time": {"$exists": True, "$ne": None}}},
+            {"$match": processing_time_filter},
             {"$group": {"_id": None, "avg_time": {"$avg": "$processing_time"}}},
         ]
         processing_time_result = await documents_collection.aggregate(
@@ -373,7 +387,7 @@ async def get_document_stats():
         )
 
         # Get total documents count
-        total_documents = await documents_collection.count_documents({})
+        total_documents = await documents_collection.count_documents(match_filter)
 
         return DocumentStats(
             total_documents=total_documents,
@@ -423,10 +437,13 @@ async def list_documents(
     user_id: Optional[str] = Query(None),
     status: Optional[DocumentStatus] = Query(None),
     document_type: Optional[DocumentType] = Query(None),
+    search: Optional[str] = Query(
+        None, description="Search by title, filename, or description"
+    ),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):
-    """List documents with optional filtering."""
+    """List documents with optional filtering and keyword search."""
     try:
         documents_collection = get_documents_collection()
 
@@ -440,6 +457,15 @@ async def list_documents(
             filter_dict["status"] = status
         if document_type:
             filter_dict["document_type"] = document_type
+
+        # Add keyword search across title, filename, and description
+        if search:
+            search_pattern = {"$regex": search, "$options": "i"}  # case-insensitive
+            filter_dict["$or"] = [
+                {"title": search_pattern},
+                {"filename": search_pattern},
+                {"description": search_pattern},
+            ]
 
         # Get total count
         total = await documents_collection.count_documents(filter_dict)

@@ -104,14 +104,26 @@ class DraftAnalysisResponse(BaseModel):
     items: List[AnalysisItem] = Field(..., description="Generated analysis items")
 
 
+class EvaluationResult(BaseModel):
+    """Evaluation result from the AI agent."""
+
+    score: int = Field(..., description="Score for the criteria (0-3)")
+    reason: str = Field(..., description="Reasoning for the pass/fail result")
+
+
 class AnalysisResultItem(BaseModel):
     """Single analysis result item."""
 
     question: str = Field(..., description="The analysis question")
-    answer: str = Field(..., description="The answer to the question")
+    score: int = Field(..., description="Score for the criteria (0-3)")
+    reason: str = Field(..., description="Reasoning or answer")
     context: Optional[str] = Field(None, description="Context used for the answer")
-    confidence: Optional[float] = Field(None, description="Confidence score (0-1)")
-    sources: List[str] = Field(default_factory=list, description="Source references")
+    sources: Dict[str, Any] = Field(
+        default_factory=dict, description="Source references (paths, pages)"
+    )
+
+    class Config:
+        populate_by_name = True
 
 
 class AnalysisResultStatus(str, Enum):
@@ -161,8 +173,41 @@ class AnalysisResultResponse(BaseModel):
     )
     total_items: int = Field(..., description="Total number of items")
     completed_items: int = Field(..., description="Number of completed items")
+    usage: Dict[str, Any] = Field(
+        default_factory=dict, description="Accumulated token usage"
+    )
+    score_total: Optional[int] = Field(None, description="Sum of item scores")
+    score_max: Optional[int] = Field(None, description="Maximum possible score")
+    score_percentage: Optional[float] = Field(
+        None, description="Score percentage (0-100)"
+    )
 
     # Timestamps
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
+
+
+class AnalysisResultListResponse(BaseModel):
+    """Analysis result list response model."""
+
+    results: List[AnalysisResultResponse] = Field(
+        ..., description="List of analysis results"
+    )
+    total: int = Field(..., description="Total number of results")
+    page: int = Field(..., description="Current page number")
+    size: int = Field(..., description="Page size")
+    pages: int = Field(..., description="Total number of pages")
+
+
+class AnalysisStatsResponse(BaseModel):
+    """Analysis statistics response model."""
+
+    total_documents: int = Field(..., description="Total number of documents analyzed")
+    total_input_token_usage: int = Field(..., description="Total number of tokens used")
+    total_output_token_usage: int = Field(
+        ..., description="Total number of tokens generated"
+    )
+    total_analysis_time: float = Field(
+        ..., description="Total analysis time in seconds"
+    )

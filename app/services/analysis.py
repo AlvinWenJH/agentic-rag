@@ -26,6 +26,8 @@ from app.models.analysis import (
     DraftAnalysisResponse,
     AnalysisResultItem,
     AnalysisResultStatus,
+    AnalysisStatsResponse,
+    EvaluationResult,
 )
 from app.services.query import QueryService
 
@@ -55,6 +57,9 @@ class AnalysisService:
 
             # Create agent for draft analysis generation
             self.draft_agent = Agent(model=self.model)
+
+            # Create agent for evaluation
+            self.evaluation_agent = Agent(model=self.model)
 
             logger.info(
                 "Analysis service Pydantic AI configured",
@@ -253,6 +258,13 @@ Generate between 3-10 analysis items depending on the complexity of the topic.""
             analysis_items = analysis.get("items", [])
             results = []
 
+            # Initialize total usage
+            total_usage = {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+            }
+
             for item in analysis_items:
                 try:
                     logger.info(
@@ -263,27 +275,82 @@ Generate between 3-10 analysis items depending on the complexity of the topic.""
 
                     # Query document using the analysis question
                     answer_text = ""
-                    sources = []
+                    sources = {}
+                    item_usage = {}
 
                     async for event in query_service.query_doc(
                         document_id=document_id,
                         query=item.get("question"),
                         user_id=analysis.get("user_id"),
                     ):
-                        if event.get("type") == "text_chunk":
+                        if event.get("type") == "text_delta":
                             answer_text += event.get("content", "")
-                        elif event.get("type") == "sources":
-                            sources = event.get("sources", [])
+                        elif event.get("type") == "final_result":
+                            # Extract sources from references
+                            references = event.get("references", {})
+                            query_paths = references.get("query_paths", [])
+                            retrieved_pages = references.get("retrieved_pages", [])
+
+                            sources = {
+                                "query_paths": query_paths,
+                                "retrieved_pages": retrieved_pages,
+                            }
+
+                            # Accumulate usage
+                            if "usage" in event:
+                                item_usage = event["usage"]
+                                total_usage["input_tokens"] += item_usage.get(
+                                    "input_tokens", 0
+                                )
+                                total_usage["output_tokens"] += item_usage.get(
+                                    "output_tokens", 0
+                                )
+                                total_usage["total_tokens"] += item_usage.get(
+                                    "input_tokens", 0
+                                ) + item_usage.get("output_tokens", 0)
+
+                    # Evaluate the answer using the evaluation agent
+                    evaluation_prompt = f"""
+                    Question: {item.get("question")}
+                    Context: {item.get("context", "No additional context provided.")}
+                    Answer: {answer_text}
+
+                    Evaluate if the answer satisfactorily addresses the question based on the provided context.
+                    If the answer is empty or indicates that the information was not found, mark it as failed.
+                    Provide a concise reason for your evaluation.
+                    Scoring metrics:
+                    0: Failed
+                    1: There is non explicit evidence
+                    2: Partially comply
+                    3: Fully comply
+                    """
+
+                    evaluation_result = await self.evaluation_agent.run(
+                        evaluation_prompt,
+                        output_type=EvaluationResult,
+                    )
+
+                    # Accumulate evaluation usage
+                    eval_usage = evaluation_result.usage()
+                    total_usage["input_tokens"] += eval_usage.input_tokens
+                    total_usage["output_tokens"] += eval_usage.output_tokens
+                    total_usage["total_tokens"] += (
+                        eval_usage.input_tokens + eval_usage.output_tokens
+                    )
+
+                    score = evaluation_result.output.score
+                    reason = evaluation_result.output.reason
 
                     # Create result item
                     result_item = AnalysisResultItem(
                         question=item.get("question"),
-                        answer=answer_text.strip(),
+                        score=score,
+                        reason=reason,
                         context=item.get("context"),
                         sources=sources,
                     )
 
-                    results.append(result_item.dict())
+                    results.append(result_item.model_dump())
 
                     # Update progress
                     await results_collection.update_one(
@@ -304,7 +371,6 @@ Generate between 3-10 analysis items depending on the complexity of the topic.""
                         completed=len(results),
                         total=len(analysis_items),
                     )
-
                 except Exception as e:
                     logger.error(
                         "Failed to process analysis item",
@@ -312,8 +378,16 @@ Generate between 3-10 analysis items depending on the complexity of the topic.""
                         question=item.get("question"),
                         error=str(e),
                     )
-                    # Continue with next item even if one fails
-                    continue
+                    result_item = AnalysisResultItem(
+                        question=item.get("question"),
+                        score=0,
+                        reason=f"Failed to evaluate {e}",
+                        context=item.get("context"),
+                        sources={},
+                    )
+
+                    results.append(result_item.model_dump())
+                # break
 
             processing_time = time.time() - start_time
 
@@ -324,6 +398,7 @@ Generate between 3-10 analysis items depending on the complexity of the topic.""
                     "$set": {
                         "status": AnalysisResultStatus.COMPLETED,
                         "processing_time": processing_time,
+                        "usage": total_usage,
                         "completed_at": datetime.utcnow(),
                         "updated_at": datetime.utcnow(),
                     }
@@ -359,6 +434,205 @@ Generate between 3-10 analysis items depending on the complexity of the topic.""
                 )
             except Exception:
                 pass
+
+    async def get_analysis_results(
+        self,
+        analysis_id: str,
+        skip: int = 0,
+        limit: int = 50,
+        search: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get analysis results for an analysis with pagination and search.
+
+        Args:
+            analysis_id: Analysis ID
+            skip: Number of items to skip
+            limit: Number of items to return
+            search: Optional search term for document title
+
+        Returns:
+            Dictionary with results and pagination info
+        """
+        try:
+            results_collection = get_analysis_results_collection()
+
+            # Build filter
+            filter_dict = {"analysis_id": analysis_id}
+
+            # Add search
+            if search:
+                search_pattern = {"$regex": search, "$options": "i"}
+                filter_dict["$or"] = [
+                    {"document_title": search_pattern},
+                    {"results.reason": search_pattern},
+                    {"results.answer": search_pattern},  # Support legacy search
+                ]
+
+            # Get total count
+            total = await results_collection.count_documents(filter_dict)
+
+            # Get results
+            cursor = (
+                results_collection.find(filter_dict)
+                .skip(skip)
+                .limit(limit)
+                .sort("created_at", -1)
+            )
+            results = await cursor.to_list(length=limit)
+
+            # Convert ObjectIds to strings and compute score metadata
+            for result in results:
+                result["id"] = str(result["_id"])
+                del result["_id"]
+
+                scores = [
+                    int(item.get("score", 0)) for item in result.get("results", [])
+                ]
+                total_items = int(
+                    result.get("total_items", len(result.get("results", [])))
+                )
+                score_total = sum(scores)
+                score_max = total_items * 3
+                score_percentage = (
+                    (score_total / score_max * 100) if score_max > 0 else 0.0
+                )
+                result["score_total"] = score_total
+                result["score_max"] = score_max
+                result["score_percentage"] = round(score_percentage, 2)
+
+                result["results"] = []
+
+            # Calculate pagination
+            page = (skip // limit) + 1
+            pages = (total + limit - 1) // limit
+
+            return {
+                "results": results,
+                "total": total,
+                "page": page,
+                "size": limit,
+                "pages": pages,
+            }
+
+        except Exception as e:
+            logger.error(
+                "Failed to get analysis results",
+                analysis_id=analysis_id,
+                error=str(e),
+            )
+            raise ProcessingError(f"Failed to get analysis results: {str(e)}")
+
+    async def get_analysis_result_by_ids(
+        self,
+        analysis_id: str,
+        document_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Get analysis result by analysis ID and document ID.
+
+        Args:
+            analysis_id: Analysis ID
+            document_id: Document ID
+
+        Returns:
+            Analysis result dictionary
+        """
+        try:
+            results_collection = get_analysis_results_collection()
+
+            # Find result
+            result = await results_collection.find_one(
+                {
+                    "analysis_id": analysis_id,
+                    "document_id": document_id,
+                }
+            )
+
+            if not result:
+                return None
+
+            # Convert ObjectId to string
+            result["id"] = str(result["_id"])
+            del result["_id"]
+
+            # Normalize results to match new schema
+            if "results" in result:
+                normalized_items = []
+                for item in result["results"]:
+                    # Handle legacy items
+                    if "answer" in item and "reason" not in item:
+                        item["reason"] = item["answer"]
+                        # item.pop("answer", None)
+
+                    # Handle legacy sources
+                    if isinstance(item.get("sources"), list):
+                        item["sources"] = {"legacy": item["sources"]}
+
+                    # Calculate pass if not present (score >= 2 is pass)
+                    if "pass" not in item and "score" in item:
+                        item["pass"] = item["score"] >= 2
+                    elif "pass" not in item:
+                        # Default to false if no score or pass
+                        item["pass"] = False
+
+                    normalized_items.append(item)
+                result["results"] = normalized_items
+
+            return result
+
+        except Exception as e:
+            logger.error(
+                "Failed to get analysis result by IDs",
+                analysis_id=analysis_id,
+                document_id=document_id,
+                error=str(e),
+            )
+            raise ProcessingError(f"Failed to get analysis result: {str(e)}")
+
+    async def get_analysis_stats(self) -> AnalysisStatsResponse:
+        """
+        Get overall analysis statistics across all analysis results.
+
+        Returns:
+            AnalysisStatsResponse
+        """
+        try:
+            results_collection = get_analysis_results_collection()
+
+            # Count distinct documents analyzed
+            try:
+                distinct_doc_ids = await results_collection.distinct("document_id")
+                total_documents = len(distinct_doc_ids)
+            except Exception:
+                # Fallback: count all results (may overcount if multiple runs per document)
+                total_documents = await results_collection.count_documents({})
+
+            # Sum token usage and processing time across all results
+            total_input = 0
+            total_output = 0
+            total_time = 0.0
+
+            cursor = results_collection.find({}, {"usage": 1, "processing_time": 1})
+            async for doc in cursor:
+                usage = doc.get("usage") or {}
+                total_input += int(usage.get("input_tokens", 0))
+                total_output += int(usage.get("output_tokens", 0))
+                try:
+                    total_time += float(doc.get("processing_time", 0.0))
+                except Exception:
+                    pass
+
+            return AnalysisStatsResponse(
+                total_documents=total_documents,
+                total_input_token_usage=total_input,
+                total_output_token_usage=total_output,
+                total_analysis_time=total_time,
+            )
+
+        except Exception as e:
+            logger.error("Failed to get analysis stats", error=str(e))
+            raise ProcessingError(f"Failed to get analysis stats: {str(e)}")
 
 
 # Service instance

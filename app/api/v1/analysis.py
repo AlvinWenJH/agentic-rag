@@ -22,6 +22,8 @@ from app.models.analysis import (
     DocumentAnalysisResponse,
     AnalysisResultResponse,
     AnalysisResultStatus,
+    AnalysisResultListResponse,
+    AnalysisStatsResponse,
 )
 from app.services.analysis import analysis_service
 from app.core.database import get_analysis_collection, get_analysis_results_collection
@@ -115,10 +117,11 @@ async def get_analysis(analysis_id: str):
 async def list_analyses(
     user_id: Optional[str] = Query(None),
     status: Optional[AnalysisStatus] = Query(None),
+    search: Optional[str] = Query(None, description="Search by title or description"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):
-    """List analyses with optional filtering."""
+    """List analyses with optional filtering and keyword search."""
     try:
         analysis_collection = get_analysis_collection()
 
@@ -128,6 +131,14 @@ async def list_analyses(
             filter_dict["user_id"] = user_id
         if status:
             filter_dict["status"] = status
+
+        # Add keyword search across title and description
+        if search:
+            search_pattern = {"$regex": search, "$options": "i"}  # case-insensitive
+            filter_dict["$or"] = [
+                {"title": search_pattern},
+                {"description": search_pattern},
+            ]
 
         # Get total count
         total = await analysis_collection.count_documents(filter_dict)
@@ -321,6 +332,17 @@ async def analyze_document(request: DocumentAnalysisRequest):
         raise HTTPException(status_code=500, detail="Failed to start document analysis")
 
 
+@router.get("/results/stats", response_model=AnalysisStatsResponse)
+async def get_analysis_stats():
+    """Get overall analysis statistics across all results."""
+    try:
+        stats = await analysis_service.get_analysis_stats()
+        return stats
+    except Exception as e:
+        logger.error("Failed to get analysis stats", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to get analysis stats")
+
+
 @router.get("/results/{result_id}", response_model=AnalysisResultResponse)
 async def get_analysis_result(result_id: str):
     """Get analysis result by ID."""
@@ -350,6 +372,74 @@ async def get_analysis_result(result_id: str):
         raise HTTPException(
             status_code=500, detail="Failed to retrieve analysis result"
         )
+
+
+@router.get(
+    "/{analysis_id}/document/{document_id}", response_model=AnalysisResultResponse
+)
+async def get_analysis_result_by_ids(analysis_id: str, document_id: str):
+    """Get analysis result by analysis ID and document ID."""
+    try:
+        # Validate IDs
+        try:
+            ObjectId(analysis_id)
+            ObjectId(document_id)
+        except InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid ID format")
+
+        result = await analysis_service.get_analysis_result_by_ids(
+            analysis_id=analysis_id,
+            document_id=document_id,
+        )
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Analysis result not found")
+
+        return AnalysisResultResponse(**result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to get analysis result",
+            analysis_id=analysis_id,
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve analysis result"
+        )
+
+
+@router.get("/{analysis_id}/documents", response_model=AnalysisResultListResponse)
+async def list_analysis_documents(
+    analysis_id: str,
+    search: Optional[str] = Query(None, description="Search by document title"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=1000),
+):
+    """List documents (analysis results) for an analysis."""
+    try:
+        # Convert string ID to ObjectId to validate format
+        try:
+            ObjectId(analysis_id)
+        except InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid analysis ID format")
+
+        return await analysis_service.get_analysis_results(
+            analysis_id=analysis_id,
+            skip=skip,
+            limit=limit,
+            search=search,
+        )
+
+    except Exception as e:
+        logger.error(
+            "Failed to list analysis documents",
+            analysis_id=analysis_id,
+            error=str(e),
+        )
+        raise HTTPException(status_code=500, detail="Failed to list analysis documents")
 
 
 @router.get("/results/document/{document_id}")
