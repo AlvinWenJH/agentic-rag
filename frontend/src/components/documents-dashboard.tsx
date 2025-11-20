@@ -558,7 +558,7 @@ export default function DocumentsDashboard() {
                   <Pagination>
                     <PaginationContent>
                       <PaginationItem>
-                        <PaginationPrevious 
+                        <PaginationPrevious size="default"
                           onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                           className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                         />
@@ -573,7 +573,7 @@ export default function DocumentsDashboard() {
                         ) {
                           return (
                             <PaginationItem key={page}>
-                              <PaginationLink
+                              <PaginationLink size="default"
                                 onClick={() => setCurrentPage(page)}
                                 isActive={currentPage === page}
                                 className="cursor-pointer"
@@ -600,7 +600,7 @@ export default function DocumentsDashboard() {
                       })}
                       
                       <PaginationItem>
-                        <PaginationNext
+                        <PaginationNext size="default"
                           onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                           className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
                         />
