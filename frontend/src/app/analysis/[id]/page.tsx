@@ -1,6 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import BreadcrumbCurrentPage from "@/components/breadcrumb-current-page"
-import AnalysisDashboard from "@/components/analysis-dashboard"
+import AnalysisDetail from "@/components/analysis-detail"
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -16,7 +16,9 @@ import {
     SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-export default function Page() {
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
+
     return (
         <SidebarProvider>
             <AppSidebar />
@@ -31,6 +33,10 @@ export default function Page() {
                                     <BreadcrumbLink href="#">Archivist</BreadcrumbLink>
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator className="hidden md:block" />
+                                <BreadcrumbItem className="hidden md:block">
+                                    <BreadcrumbLink href="/analysis">Analysis</BreadcrumbLink>
+                                </BreadcrumbItem>
+                                <BreadcrumbSeparator className="hidden md:block" />
                                 <BreadcrumbItem>
                                     <BreadcrumbPage>
                                         <BreadcrumbCurrentPage />
@@ -41,7 +47,7 @@ export default function Page() {
                     </div>
                 </header>
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <AnalysisDashboard />
+                    <AnalysisDetail analysisId={id} />
                 </div>
             </SidebarInset>
         </SidebarProvider>

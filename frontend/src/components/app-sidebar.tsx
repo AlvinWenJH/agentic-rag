@@ -1,6 +1,7 @@
 "use client"
+
 import * as React from "react"
-import { GalleryVerticalEnd, Home as HomeIcon, FileText, Folder, Wrench, MessageSquare, type LucideIcon } from "lucide-react"
+import { GalleryVerticalEnd, Home as HomeIcon, FileText, Folder, Wrench, MessageSquare, ClipboardList, type LucideIcon } from "lucide-react"
 import { usePathname } from "next/navigation"
 
 import {
@@ -76,7 +77,7 @@ const data: { user: NavUser, navMain: NavMainItem[] } = {
                 {
                     title: "Document Analysis",
                     url: "/analysis",
-                    icon: FileText,
+                    icon: ClipboardList,
                 }
             ],
         }

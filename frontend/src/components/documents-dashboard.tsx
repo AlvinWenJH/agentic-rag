@@ -10,6 +10,7 @@ import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent, EmptyMe
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog"
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { getBackendUrl } from "@/lib/env"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "sonner"
@@ -46,7 +47,13 @@ export default function DocumentsDashboard() {
 
   const [loadingDocs, setLoadingDocs] = React.useState(true)
   const [docs, setDocs] = React.useState<DocumentItem[]>([])
+  const [totalDocs, setTotalDocs] = React.useState(0)
   const [query, setQuery] = React.useState("")
+  const [debouncedQuery, setDebouncedQuery] = React.useState("")
+  
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const itemsPerPage = 10
+
   const [openUpload, setOpenUpload] = React.useState(false)
   const [uploading, setUploading] = React.useState(false)
   const [uploadError, setUploadError] = React.useState<string | null>(null)
@@ -59,27 +66,54 @@ export default function DocumentsDashboard() {
   const [deleteTarget, setDeleteTarget] = React.useState<DocumentItem | null>(null)
   const [deleting, setDeleting] = React.useState(false)
 
+  // Debounce query
   React.useEffect(() => {
-    async function fetchAll() {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query)
+      setCurrentPage(1) // Reset to page 1 on search
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  // Load stats
+  React.useEffect(() => {
+    async function fetchStats() {
       try {
-        const [sRes, dRes] = await Promise.all([
-          fetch(`${backendUrl}/api/v1/documents/stats`, { headers: { accept: "application/json" } }),
-          fetch(`${backendUrl}/api/v1/documents/?skip=0&limit=10`, { headers: { accept: "application/json" } }),
-        ])
-        const sJson = await sRes.json().catch(() => ({}))
-        const dJson = await dRes.json().catch(() => ({}))
-        setStats(sJson ?? null)
-        setDocs(Array.isArray(dJson?.documents) ? dJson.documents : [])
+        const res = await fetch(`${backendUrl}/api/v1/documents/stats`, { headers: { accept: "application/json" } })
+        const data = await res.json().catch(() => ({}))
+        setStats(data ?? null)
       } catch (_) {
         setStats(null)
-        setDocs([])
       } finally {
         setLoadingStats(false)
+      }
+    }
+    fetchStats()
+  }, [backendUrl])
+
+  // Load documents with server-side pagination
+  React.useEffect(() => {
+    async function fetchDocs() {
+      setLoadingDocs(true)
+      try {
+        const skip = (currentPage - 1) * itemsPerPage
+        const searchParam = debouncedQuery ? `&search=${encodeURIComponent(debouncedQuery)}` : ''
+        const res = await fetch(
+          `${backendUrl}/api/v1/documents/?skip=${skip}&limit=${itemsPerPage}${searchParam}`, 
+          { headers: { accept: "application/json" } }
+        )
+        const data = await res.json().catch(() => ({}))
+        setDocs(Array.isArray(data?.documents) ? data.documents : [])
+        setTotalDocs(data?.total ?? 0)
+      } catch (_) {
+        setDocs([])
+        setTotalDocs(0)
+      } finally {
         setLoadingDocs(false)
       }
     }
-    fetchAll()
-  }, [])
+    fetchDocs()
+  }, [backendUrl, currentPage, debouncedQuery])
 
   React.useEffect(() => {
     const ids = Array.isArray(docs) ? docs.map((d) => d.id).filter(Boolean) : []
@@ -219,6 +253,7 @@ export default function DocumentsDashboard() {
       }
       // Optimistically update list
       setDocs((prev) => prev.filter((d) => d.id !== deleteTarget.id))
+      setTotalDocs(prev => Math.max(0, prev - 1))
       setOpenDelete(false)
       setDeleteTarget(null)
     } catch (err: any) {
@@ -228,17 +263,9 @@ export default function DocumentsDashboard() {
     }
   }
 
-  const filtered = React.useMemo(() => {
-    if (!query) return docs
-    const q = query.toLowerCase()
-    return docs.filter((d) =>
-      [d.filename, d.title, d.description].some((v) => (v ?? "").toLowerCase().includes(q))
-    )
-  }, [docs, query])
-
   const uploaded = stats?.documents_by_status?.uploaded ?? 0
   const completed = stats?.documents_by_status?.completed ?? 0
-  const total = stats?.total_documents ?? (Array.isArray(docs) ? docs.length : 0)
+  const total = stats?.total_documents ?? totalDocs
   const totalSize = stats?.total_file_size ?? sumBytes(docs)
 
   async function handleUpload(e?: React.FormEvent) {
@@ -296,11 +323,19 @@ export default function DocumentsDashboard() {
       // Try to refresh stats and list for up-to-date view
       try {
         const sRes = await fetch(`${backendUrl}/api/v1/documents/stats`, { headers: { accept: "application/json" } })
-        const dRes = await fetch(`${backendUrl}/api/v1/documents/?skip=0&limit=10`, { headers: { accept: "application/json" } })
         const sJson = await sRes.json().catch(() => ({}))
-        const dJson = await dRes.json().catch(() => ({}))
         setStats(sJson ?? null)
+        
+        // Refresh current page
+        const skip = (currentPage - 1) * itemsPerPage
+        const searchParam = debouncedQuery ? `&search=${encodeURIComponent(debouncedQuery)}` : ''
+        const dRes = await fetch(
+          `${backendUrl}/api/v1/documents/?skip=${skip}&limit=${itemsPerPage}${searchParam}`, 
+          { headers: { accept: "application/json" } }
+        )
+        const dJson = await dRes.json().catch(() => ({}))
         setDocs(Array.isArray(dJson?.documents) ? dJson.documents : [])
+        setTotalDocs(dJson?.total ?? 0)
       } catch (_) {
         // ignore refresh errors
       }
@@ -316,6 +351,8 @@ export default function DocumentsDashboard() {
       setUploading(false)
     }
   }
+  
+  const totalPages = Math.ceil(totalDocs / itemsPerPage)
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -352,7 +389,7 @@ export default function DocumentsDashboard() {
       <Card>
         <CardHeader className="border-b">
           <CardTitle>All Documents</CardTitle>
-          <CardDescription>{formatNumber(total)} documents found</CardDescription>
+          <CardDescription>{formatNumber(totalDocs)} documents found</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex items-center gap-2">
@@ -433,7 +470,7 @@ export default function DocumentsDashboard() {
                 <Skeleton key={i} className="h-9 w-full" />
               ))}
             </div>
-          ) : filtered.length > 0 ? (
+          ) : docs.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -447,7 +484,7 @@ export default function DocumentsDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((doc) => (
+                  {docs.map((doc) => (
                     <tr key={doc.id} className="border-b last:border-0">
                       <td className="py-3 px-2">
                         <div className="flex items-center gap-2">
@@ -514,6 +551,64 @@ export default function DocumentsDashboard() {
                   ))}
                 </tbody>
               </table>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center pt-4">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                        // Show first, last, current, and adjacent pages
+                        if (
+                          page === 1 ||
+                          page === totalPages ||
+                          (page >= currentPage - 1 && page <= currentPage + 1)
+                        ) {
+                          return (
+                            <PaginationItem key={page}>
+                              <PaginationLink
+                                onClick={() => setCurrentPage(page)}
+                                isActive={currentPage === page}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          )
+                        }
+                        
+                        // Show ellipsis
+                        if (
+                          (page === currentPage - 2 && page > 1) ||
+                          (page === currentPage + 2 && page < totalPages)
+                        ) {
+                          return (
+                            <PaginationItem key={page}>
+                              <span className="flex h-9 w-9 items-center justify-center">...</span>
+                            </PaginationItem>
+                          )
+                        }
+                        
+                        return null
+                      })}
+                      
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
             </div>
           ) : (
             <Empty>

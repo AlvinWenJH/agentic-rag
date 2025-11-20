@@ -1,6 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import BreadcrumbCurrentPage from "@/components/breadcrumb-current-page"
-import AnalysisDashboard from "@/components/analysis-dashboard"
+import DraftAnalysis from "@/components/draft-analysis"
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -31,6 +31,10 @@ export default function Page() {
                                     <BreadcrumbLink href="#">Archivist</BreadcrumbLink>
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator className="hidden md:block" />
+                                <BreadcrumbItem className="hidden md:block">
+                                    <BreadcrumbLink href="/analysis">Analysis</BreadcrumbLink>
+                                </BreadcrumbItem>
+                                <BreadcrumbSeparator className="hidden md:block" />
                                 <BreadcrumbItem>
                                     <BreadcrumbPage>
                                         <BreadcrumbCurrentPage />
@@ -41,7 +45,7 @@ export default function Page() {
                     </div>
                 </header>
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <AnalysisDashboard />
+                    <DraftAnalysis />
                 </div>
             </SidebarInset>
         </SidebarProvider>
