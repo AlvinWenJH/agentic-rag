@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getBackendUrl } from "@/lib/env"
-import { Settings, Hash, BarChart3, Cpu, Database, Send as SendIcon, Bot, FileText, ZoomOut, ZoomIn, RefreshCcw } from "lucide-react"
+import { Settings, Hash, BarChart3, Cpu, Database, Send as SendIcon, Bot, FileText, ZoomOut, ZoomIn, RefreshCcw, MessageSquare, Plus, Trash2 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Spinner } from "@/components/ui/spinner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -31,6 +31,16 @@ type ChatMessage = {
     usage?: any
     references?: any
   }
+}
+
+type Conversation = {
+  id: string
+  document_id: string
+  user_id?: string
+  title: string
+  created_at: string
+  updated_at: string
+  message_count: number
 }
 
 export default function ChatPane() {
@@ -63,6 +73,11 @@ export default function ChatPane() {
   const dragStartRef = React.useRef<{ x: number; y: number } | null>(null)
   const dragPanStartRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const previewAspectRef = React.useRef<number | null>(null)
+  
+  // Conversation history state
+  const [conversations, setConversations] = React.useState<Conversation[]>([])
+  const [loadingConversations, setLoadingConversations] = React.useState(false)
+  const [activeConversation, setActiveConversation] = React.useState<Conversation | null>(null)
 
   React.useEffect(() => {
     let mounted = true
@@ -104,6 +119,9 @@ export default function ChatPane() {
   React.useEffect(() => {
     setSelectedDetail(null)
     if (selected?.id) loadSelectedDetail()
+    // Clear active conversation and messages when switching documents
+    setActiveConversation(null)
+    setMessages([])
   }, [loadSelectedDetail, selected?.id])
 
   React.useEffect(() => {
@@ -251,6 +269,99 @@ export default function ChatPane() {
     }
   }, [openRefsIndex, backendUrl, messages])
 
+  // Load conversations when document is selected
+  React.useEffect(() => {
+    if (!selected?.id) {
+      setConversations([])
+      setActiveConversation(null)
+      return
+    }
+    loadConversations()
+  }, [selected?.id, backendUrl])
+
+  async function loadConversations() {
+    if (!selected?.id) return
+    setLoadingConversations(true)
+    try {
+      const res = await fetch(`${backendUrl}/api/v1/conversations/?limit=50&skip=0`, {
+        headers: { accept: "application/json" },
+      })
+      const data = await res.json().catch(() => ({ conversations: [] }))
+      const convos = Array.isArray(data.conversations) ? data.conversations.filter((c: Conversation) => c.document_id === selected.id) : []
+      setConversations(convos)
+    } catch {
+      setConversations([])
+    } finally {
+      setLoadingConversations(false)
+    }
+  }
+
+  async function createNewConversation() {
+    if (!selected?.id) return
+    try {
+      const res = await fetch(`${backendUrl}/api/v1/conversations/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document_id: selected.id }),
+      })
+      const data = await res.json().catch(() => null)
+      if (data?.conversation_id) {
+        const newConvo: Conversation = {
+          id: data.conversation_id,
+          document_id: selected.id,
+          title: data.title || "New Conversation",
+          created_at: data.created_at,
+          updated_at: data.created_at,
+          message_count: 0,
+        }
+        setActiveConversation(newConvo)
+        setMessages([])
+        await loadConversations()
+      }
+    } catch (err) {
+      console.error("Failed to create conversation", err)
+    }
+  }
+
+  async function loadConversationMessages(conversationId: string) {
+    try {
+      const res = await fetch(`${backendUrl}/api/v1/conversations/${conversationId}`, {
+        headers: { accept: "application/json" },
+      })
+      const data = await res.json().catch(() => null)
+      if (data?.messages) {
+        const loadedMessages: ChatMessage[] = data.messages.map((msg: any) => ({
+          role: msg.role,
+          content: msg.content,
+          meta: msg.meta,
+        }))
+        setMessages(loadedMessages)
+      }
+    } catch (err) {
+      console.error("Failed to load conversation messages", err)
+    }
+  }
+
+  async function selectConversation(convo: Conversation) {
+    setActiveConversation(convo)
+    await loadConversationMessages(convo.id)
+  }
+
+  async function deleteConversationById(conversationId: string) {
+    try {
+      await fetch(`${backendUrl}/api/v1/conversations/${conversationId}`, {
+        method: "DELETE",
+      })
+      await loadConversations()
+      if (activeConversation?.id === conversationId) {
+        setActiveConversation(null)
+        setMessages([])
+      }
+    } catch (err) {
+      console.error("Failed to delete conversation", err)
+    }
+  }
+
   async function handleSubmit(e?: React.FormEvent) {
     if (e) e.preventDefault()
     if (!selected || !input.trim() || isStreaming) return
@@ -259,6 +370,34 @@ export default function ChatPane() {
     setMessages((prev) => [...prev, { role: "user", content: text }])
     setIsStreaming(true)
     assistantIndexRef.current = null
+    
+    // Create conversation if none exists
+    let convId = activeConversation?.id
+    if (!convId) {
+      try {
+        const res = await fetch(`${backendUrl}/api/v1/conversations/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ document_id: selected.id }),
+        })
+        const data = await res.json().catch(() => null)
+        if (data?.conversation_id) {
+          convId = data.conversation_id
+          const newConvo: Conversation = {
+            id: data.conversation_id,
+            document_id: selected.id,
+            title: data.title || "New Conversation",
+            created_at: data.created_at,
+            updated_at: data.created_at,
+            message_count: 0,
+          }
+          setActiveConversation(newConvo)
+        }
+      } catch (err) {
+        console.error("Failed to create conversation", err)
+      }
+    }
+    
     const url = `${backendUrl}/api/v1/query/document/${selected.id}`
     const controller = new AbortController()
     controllerRef.current = controller
@@ -270,7 +409,7 @@ export default function ChatPane() {
           accept: "text/event-stream",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ query: text }),
+        body: JSON.stringify({ query: text, conversation_id: convId }),
         signal: controller.signal,
       })
       const reader = res.body?.getReader()
@@ -359,6 +498,10 @@ export default function ChatPane() {
     } finally {
       setIsStreaming(false)
       controllerRef.current = null
+      // Reload conversations to update message count
+      if (convId) {
+        await loadConversations()
+      }
     }
   }
 
@@ -368,8 +511,72 @@ export default function ChatPane() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
-      <div className="flex-1 min-h-[40vh] p-4">
+    <div className="flex flex-1 gap-0">
+      {/* Conversations Sidebar */}
+      <div className="w-80 border-r flex flex-col bg-background">
+        <div className="p-3 border-b">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Conversations</h2>
+            <Button size="sm" onClick={createNewConversation} disabled={!selected}>
+              <Plus className="size-4 mr-1" />
+              New Chat
+            </Button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {loadingConversations ? (
+            <div className="p-4 space-y-2">
+              {Array(5).fill(0).map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : conversations.length === 0 ? (
+            <div className="p-4 text-center text-sm text-muted-foreground">
+              No conversations yet.
+              <br />
+              Start a new chat!
+            </div>
+          ) : (
+            <div className="p-2">
+              {conversations.map((convo) => (
+                <div
+                  key={convo.id}
+                  className={`p-3 rounded-lg mb-1 cursor-pointer transition-colors ${
+                    activeConversation?.id === convo.id
+                      ? "bg-accent border border-primary"
+                      : "hover:bg-accent/50"
+                  }`}
+                  onClick={() => selectConversation(convo)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{convo.title}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {new Date(convo.updated_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteConversationById(convo.id)
+                      }}
+                    >
+                      <Trash2 className="size-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Chat Area */}
+      <div className="flex-1 flex flex-col">
+        <div className="flex-1 min-h-0 p-4">
         <div ref={scrollRef} className="h-full overflow-y-auto flex flex-col gap-3">
           {messages.length === 0 ? (
             <div className="text-sm text-muted-foreground">No messages yet. Ask a question using the input below.</div>
@@ -415,7 +622,7 @@ export default function ChatPane() {
                         <Database className="size-3" /> Cache {Number(m.meta.usage?.cache_read_tokens || 0)}
                       </span>
                     ) : null}
-                    {m.meta?.references ? (
+                    {m.meta?.references && (Array.isArray(m.meta.references.query_paths) && m.meta.references.query_paths.length > 0 || Array.isArray(m.meta.references.retrieved_pages) && m.meta.references.retrieved_pages.length > 0) ? (
                       <Sheet open={openRefsIndex === i} onOpenChange={(o) => setOpenRefsIndex(o ? i : null)}>
                         <SheetTrigger asChild>
                           <Button variant="ghost" size="sm" aria-label="References" className="inline-flex items-center gap-1">
@@ -574,10 +781,10 @@ export default function ChatPane() {
               </div>
             ))
           )}
+          </div>
         </div>
-      </div>
 
-      <div className="sticky bottom-0 z-10 bg-background border-t p-2">
+        <div className="border-t bg-background p-4">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <DropdownMenu>
             {selected ? (
@@ -648,8 +855,8 @@ export default function ChatPane() {
           {isStreaming ? (
             <Button type="button" variant="outline" onClick={cancelStream}>Stop</Button>
           ) : null}
-        </form>
-
+          </form>
+        </div>
       </div>
     </div>
   )

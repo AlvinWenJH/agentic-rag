@@ -19,6 +19,7 @@ class QueryRequest(BaseModel):
 
     query: str
     user_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 
 logger = structlog.get_logger()
@@ -46,6 +47,7 @@ async def query(document_id: str, request: QueryRequest):
                     document_id=document_id,
                     query=request.query,
                     user_id=request.user_id,
+                    conversation_id=request.conversation_id,
                 ):
                     # Convert event to JSON and yield as server-sent event
                     yield f"data: {json.dumps(event)}\n\n"

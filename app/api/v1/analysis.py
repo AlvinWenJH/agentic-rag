@@ -78,17 +78,6 @@ async def create_analysis(analysis_data: AnalysisCreate):
         logger.info("Analysis created successfully", analysis_id=analysis_id)
 
         return AnalysisResponse(**created_analysis)
-
-    except Exception as e:
-        logger.error("Failed to create analysis", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to create analysis")
-
-
-@router.get("/{analysis_id}", response_model=AnalysisResponse)
-async def get_analysis(analysis_id: str):
-    """Get analysis by ID."""
-    try:
-        # Convert string ID to ObjectId
         try:
             object_id = ObjectId(analysis_id)
         except InvalidId:
@@ -172,6 +161,36 @@ async def list_analyses(
     except Exception as e:
         logger.error("Failed to list analyses", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to list analyses")
+
+
+@router.get("/recent")
+async def get_recent_analysis_results(
+    limit: int = Query(4, ge=1, le=10),
+):
+    """Get recent analysis results for the home dashboard."""
+    try:
+        results_collection = get_analysis_results_collection()
+
+        # Get recent results, excluding soft-deleted ones
+        cursor = (
+            results_collection.find({"is_deleted": {"$ne": True}})
+            .sort("updated_at", -1)
+            .limit(limit)
+        )
+        results = await cursor.to_list(length=limit)
+
+        # Convert ObjectIds to strings
+        for result in results:
+            result["id"] = str(result["_id"])
+            del result["_id"]
+
+        return {"results": [AnalysisResultResponse(**r) for r in results]}
+
+    except Exception as e:
+        logger.error("Failed to get recent analysis results", error=str(e))
+        raise HTTPException(
+            status_code=500, detail="Failed to get recent analysis results"
+        )
 
 
 @router.put("/{analysis_id}", response_model=AnalysisResponse)
@@ -440,6 +459,39 @@ async def list_analysis_documents(
             error=str(e),
         )
         raise HTTPException(status_code=500, detail="Failed to list analysis documents")
+
+
+@router.delete("/{analysis_id}/result/{document_id}")
+async def delete_analysis_result(analysis_id: str, document_id: str):
+    """Delete analysis result (soft delete)."""
+    try:
+        # Validate IDs
+        try:
+            ObjectId(analysis_id)
+            ObjectId(document_id)
+        except InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid ID format")
+
+        deleted = await analysis_service.delete_analysis_result(
+            analysis_id=analysis_id,
+            document_id=document_id,
+        )
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Analysis result not found")
+
+        return {"message": "Analysis result deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to delete analysis result",
+            analysis_id=analysis_id,
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(status_code=500, detail="Failed to delete analysis result")
 
 
 @router.get("/results/document/{document_id}")

@@ -114,3 +114,8 @@ def get_analysis_collection():
 def get_analysis_results_collection():
     """Get analysis_results collection."""
     return get_database().analysis_results
+
+
+def get_conversations_collection():
+    """Get conversations collection."""
+    return get_database().conversations

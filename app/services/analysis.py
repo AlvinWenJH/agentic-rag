@@ -458,7 +458,10 @@ Generate between 3-10 analysis items depending on the complexity of the topic.""
             results_collection = get_analysis_results_collection()
 
             # Build filter
-            filter_dict = {"analysis_id": analysis_id}
+            filter_dict = {
+                "analysis_id": analysis_id,
+                "is_deleted": {"$ne": True},
+            }
 
             # Add search
             if search:
@@ -522,6 +525,48 @@ Generate between 3-10 analysis items depending on the complexity of the topic.""
                 error=str(e),
             )
             raise ProcessingError(f"Failed to get analysis results: {str(e)}")
+
+    async def delete_analysis_result(
+        self,
+        analysis_id: str,
+        document_id: str,
+    ) -> bool:
+        """
+        Soft delete an analysis result.
+
+        Args:
+            analysis_id: Analysis ID
+            document_id: Document ID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        try:
+            results_collection = get_analysis_results_collection()
+
+            result = await results_collection.update_one(
+                {
+                    "analysis_id": analysis_id,
+                    "document_id": document_id,
+                },
+                {
+                    "$set": {
+                        "is_deleted": True,
+                        "updated_at": datetime.utcnow(),
+                    }
+                },
+            )
+
+            return result.modified_count > 0
+
+        except Exception as e:
+            logger.error(
+                "Failed to delete analysis result",
+                analysis_id=analysis_id,
+                document_id=document_id,
+                error=str(e),
+            )
+            raise ProcessingError(f"Failed to delete analysis result: {str(e)}")
 
     async def get_analysis_result_by_ids(
         self,

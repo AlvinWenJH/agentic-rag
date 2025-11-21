@@ -434,7 +434,11 @@ class QueryService:
             raise f"Failed to fetch document page images: {str(e)}"
 
     async def query_doc(
-        self, document_id: str, query: str, user_id: Optional[str] = None
+        self,
+        document_id: str,
+        query: str,
+        user_id: Optional[str] = None,
+        conversation_id: Optional[str] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Query a document using Pydantic AI agent with streaming response.
@@ -443,6 +447,7 @@ class QueryService:
             document_id: ID of the document to query
             query: User's query about the document
             user_id: Optional user ID for tracking
+            conversation_id: Optional conversation ID to save messages to
 
         Yields:
             Dictionary containing streaming events and final results
@@ -491,6 +496,9 @@ class QueryService:
             # Stream the agent response
             # with mlflow.start_span(name="Query") as span:
             # span.set_inputs({"query": query, "deps": deps.__dict__})
+            assistant_response = None
+            final_meta = None
+
             async for event in self.agent.run_stream_events(query, deps=deps):
                 # print(f"Received Event: {event}", flush=True)
                 # # Convert Pydantic AI events to our format
@@ -512,9 +520,14 @@ class QueryService:
                                 "tool_args": event_part.args if event_part.args else {},
                             }
                 if isinstance(event, AgentRunResultEvent):
+                    assistant_response = event.result.output
+                    final_meta = {
+                        "usage": event.result.usage().__dict__,
+                        "references": deps.__dict__,
+                    }
                     yield {
                         "type": "final_result",
-                        "content": event.result.output,
+                        "content": assistant_response,
                         "references": deps.__dict__,
                         "usage": event.result.usage().__dict__,
                     }
@@ -525,6 +538,40 @@ class QueryService:
             #         "usage": event.result.usage().__dict__,
             #     }
             # )
+
+            # Save messages to conversation if conversation_id is provided
+            if conversation_id and assistant_response:
+                try:
+                    from app.services.conversation import add_message_to_conversation
+
+                    # Add user message
+                    await add_message_to_conversation(
+                        conversation_id=conversation_id,
+                        role="user",
+                        content=query,
+                        meta={},
+                    )
+
+                    # Add assistant message
+                    await add_message_to_conversation(
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=assistant_response,
+                        meta=final_meta,
+                    )
+
+                    logger.info(
+                        "Saved messages to conversation",
+                        conversation_id=conversation_id,
+                        document_id=document_id,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to save messages to conversation",
+                        conversation_id=conversation_id,
+                        error=str(e),
+                    )
+
             logger.info(
                 "Completed document query",
                 document_id=document_id,
@@ -532,6 +579,7 @@ class QueryService:
                 query_paths=deps.query_paths,
                 retrieved_pages=deps.retrieved_pages,
                 user_id=user_id,
+                conversation_id=conversation_id,
             )
 
         except Exception as e:

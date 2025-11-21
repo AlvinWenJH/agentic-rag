@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { FileText, Download, Eye, PlayCircle, CheckCircle2, XCircle, ClipboardList, Search } from "lucide-react"
+import { FileText, Download, Eye, PlayCircle, CheckCircle2, XCircle, ClipboardList, Search, Trash } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -98,6 +98,9 @@ export default function AnalysisDetail({ analysisId }: { analysisId: string }) {
   const [analysisResults, setAnalysisResults] = React.useState<AnalysisResult[]>([])
   const [loadingResults, setLoadingResults] = React.useState(true)
   const [openDocumentDialog, setOpenDocumentDialog] = React.useState(false)
+  const [openDeleteDialog, setOpenDeleteDialog] = React.useState(false)
+  const [deleteTarget, setDeleteTarget] = React.useState<AnalysisResult | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
   const [selectedDoc, setSelectedDoc] = React.useState<string | null>(null)
   const [running, setRunning] = React.useState(false)
 
@@ -348,6 +351,38 @@ export default function AnalysisDetail({ analysisId }: { analysisId: string }) {
 
   function handleViewResult(result: AnalysisResult) {
     router.push(`/analysis/${analysisId}/result/${result.document_id}`)
+  }
+
+  function confirmDeleteResult(result: AnalysisResult) {
+    setDeleteTarget(result)
+    setOpenDeleteDialog(true)
+  }
+
+  async function performDeleteResult() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(
+        `${backendUrl}/api/v1/analysis/${analysisId}/result/${deleteTarget.document_id}`,
+        {
+          method: "DELETE",
+          headers: { accept: "application/json" },
+        }
+      )
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`)
+
+      // Optimistically update list
+      setAnalysisResults((prev) => prev.filter((r) => r.id !== deleteTarget.id))
+      setTotalResults(prev => Math.max(0, prev - 1))
+      setOpenDeleteDialog(false)
+      setDeleteTarget(null)
+      toast.success("Analysis result deleted")
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error(message || "Unable to delete analysis result")
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const totalPages = Math.ceil(totalResults / RESULTS_PER_PAGE)
@@ -613,14 +648,25 @@ export default function AnalysisDetail({ analysisId }: { analysisId: string }) {
                           </td>
                           <td className="py-3 px-2">{formatTime(result.updated_at)}</td>
                             <td className="py-3 px-2 text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                disabled={result.status !== "completed"}
-                                onClick={() => handleViewResult(result)}
-                              >
-                                <Eye className="size-4" />
-                              </Button>
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  disabled={result.status !== "completed"}
+                                  onClick={() => handleViewResult(result)}
+                                  aria-label="View"
+                                >
+                                  <Eye className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => confirmDeleteResult(result)}
+                                  aria-label="Delete"
+                                >
+                                  <Trash className="size-4" />
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -707,6 +753,38 @@ export default function AnalysisDetail({ analysisId }: { analysisId: string }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={openDeleteDialog} onOpenChange={setOpenDeleteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete analysis result?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete this document's analysis result.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="text-sm">
+            {deleteTarget ? (
+              <>
+                <p className="font-medium">{deleteTarget.document_title}</p>
+                <p className="text-muted-foreground mt-1">Are you sure you want to continue?</p>
+              </>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={performDeleteResult}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:opacity-95"
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </Button>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancel</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* View Items Sheet */}
       <Sheet open={openItemsDialog} onOpenChange={setOpenItemsDialog}>
