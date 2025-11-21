@@ -728,25 +728,27 @@ export default function ChatPane() {
                                       <Skeleton className="h-64 w-full" />
                                     </div>
                                   ) : Object.keys(refsPagesImages).length ? (
-                                    <div className="grid grid-cols-1 gap-3">
-                                      {Object.entries(refsPagesImages).map(([key, src]) => (
-                                        <div key={key} className="p-2">
-                                          {src ? (
-                                            <div className="flex w-full items-start justify-center">
-                                              <img
-                                                src={src}
-                                                alt={key}
-                                                className="block w-full h-auto object-contain rounded border cursor-zoom-in"
-                                                onClick={() => { setPreviewPageSrc(src); setPreviewZoom(1.5) }}
-                                              />
-                                            </div>
-                                          ) : (
-                                            <div className="flex h-64 w-full items-center justify-center rounded border bg-muted text-muted-foreground">
-                                              Image unavailable
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
+                                    <div className="p-2 rounded border overflow-auto max-h-[70vh]">
+                                      <div className="grid grid-cols-1 gap-3">
+                                        {Object.entries(refsPagesImages).map(([key, src]) => (
+                                          <div key={key} className="p-2">
+                                            {src ? (
+                                              <div className="flex w-full items-start justify-center">
+                                                <img
+                                                  src={src}
+                                                  alt={key}
+                                                  className="block w-full h-auto object-contain rounded border cursor-zoom-in"
+                                                  onClick={() => { setPreviewPageSrc(src); setPreviewZoom(1.5) }}
+                                                />
+                                              </div>
+                                            ) : (
+                                              <div className="flex h-64 w-full items-center justify-center rounded border bg-muted text-muted-foreground">
+                                                Image unavailable
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
                                   ) : (
                                     <p className="p-2 text-sm text-muted-foreground">No retrieved pages</p>

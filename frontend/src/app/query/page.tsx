@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar"
+import { Suspense } from "react"
 import BreadcrumbCurrentPage from "@/components/breadcrumb-current-page"
 import {
     Breadcrumb,
@@ -41,7 +42,9 @@ export default function Page() {
                     </div>
                 </header>
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <ChatPane />
+                    <Suspense>
+                        <ChatPane />
+                    </Suspense>
                 </div>
             </SidebarInset>
         </SidebarProvider>
