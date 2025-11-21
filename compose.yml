@@ -187,6 +187,7 @@ services:
     <<: *basic-config 
 
   frontend:
+    container_name: archivist-frontend
     image: alvinwen/archivist-frontend:dev
     build: 
       context: ./frontend
