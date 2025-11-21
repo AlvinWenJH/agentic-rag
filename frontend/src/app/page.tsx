@@ -19,7 +19,7 @@ export default function Home() {
                 Archivist
               </span>
             </h1>
-            <p className="text-lg sm:text-xl text-muted-foreground font-light">Concept tree and Agentic powered RAG</p>
+            <p className="text-lg sm:text-xl text-muted-foreground font-small">Concept tree and Agentic powered RAG</p>
           </div>
 
           <div className="mb-8">
