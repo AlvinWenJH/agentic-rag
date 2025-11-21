@@ -511,10 +511,9 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
             <div
               ref={containerRef}
               onScroll={onScroll}
-              className="overflow-y-auto rounded max-h-screen"
-              style={{ minHeight: containerMinHeight ? `${containerMinHeight}px` : undefined }}
+              className="overflow-y-auto rounded h-[85vh]"
             >
-              {loadedUntil === 0 && pageCount > 0 ? (
+              {loadedUntil === 0 ? (
                 <div className="p-4">
                   <Skeleton className="h-64 w-full" />
                 </div>
@@ -568,8 +567,7 @@ export default function DocumentViewer({ docId }: { docId?: string }) {
           <CardContent>
             {conceptTab === "tree" ? (
               <div
-                className="overflow-y-auto rounded border max-h-screen"
-                style={{ minHeight: containerMinHeight ? `${containerMinHeight}px` : undefined }}
+                className="overflow-y-auto rounded border h-[85vh]"
               >
                 {loadingTree ? (
                   <div className="flex flex-col gap-3 p-2">
