@@ -301,9 +301,7 @@ export default function AnalysisResultPage() {
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>
-                    <BreadcrumbCurrentPage />
-                  </BreadcrumbPage>
+                  <BreadcrumbPage>Result</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>

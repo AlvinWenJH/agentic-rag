@@ -38,9 +38,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator className="hidden md:block" />
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage>
-                                        <BreadcrumbCurrentPage />
-                                    </BreadcrumbPage>
+                                    <BreadcrumbPage>Detail</BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>

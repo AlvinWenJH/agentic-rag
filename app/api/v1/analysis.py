@@ -193,6 +193,35 @@ async def get_recent_analysis_results(
         )
 
 
+@router.get("/{analysis_id}", response_model=AnalysisResponse)
+async def get_analysis(analysis_id: str):
+    """Get analysis by ID."""
+    try:
+        # Convert string ID to ObjectId
+        try:
+            object_id = ObjectId(analysis_id)
+        except InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid analysis ID format")
+
+        analysis_collection = get_analysis_collection()
+        analysis = await analysis_collection.find_one({"_id": object_id})
+
+        if not analysis:
+            raise NotFoundError(f"Analysis {analysis_id} not found")
+
+        # Convert ObjectId to string
+        analysis["id"] = str(analysis["_id"])
+        del analysis["_id"]
+
+        return AnalysisResponse(**analysis)
+
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    except Exception as e:
+        logger.error("Failed to get analysis", analysis_id=analysis_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve analysis")
+
+
 @router.put("/{analysis_id}", response_model=AnalysisResponse)
 async def update_analysis(analysis_id: str, update_data: AnalysisUpdate):
     """Update analysis."""

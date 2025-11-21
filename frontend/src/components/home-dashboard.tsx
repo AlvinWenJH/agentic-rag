@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { FileText, MessageSquare, CircleCheckBig, Clock, Upload, XCircle, CheckCircle, AlertTriangle } from "lucide-react"
+import { FileText, MessageSquare, CircleCheckBig, Clock, Upload, XCircle, CheckCircle, AlertTriangle, ClipboardList } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -14,18 +14,24 @@ export default function HomeDashboard() {
     return (
         <div className="flex flex-1 flex-col gap-6">
             {/* Top descriptive cards */}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
                 <TopCard
                     href="/documents"
                     title="Documents"
                     icon={FileText}
-                    description="Upload and analyze documents to extract key topics and run analysis"
+                    description="Upload and analyze documents to extract key topics"
                 />
                 <TopCard
                     href="/query"
                     title="Chat"
                     icon={MessageSquare}
                     description="Ask questions about your documents in agentic pattern"
+                />
+                <TopCard
+                    href="/analysis"
+                    title="Analysis"
+                    icon={ClipboardList}
+                    description="View and manage your analysis"
                 />
             </div>
 
@@ -188,7 +194,7 @@ function RecentConversationsCard() {
                 ) : hasItems ? (
                     <div className="flex flex-col gap-4">
                         {items.map((conv) => (
-                            <Link key={conv.id} href="/query" prefetch>
+                            <Link key={conv.id} href={`/query?documentId=${conv.document_id}&conversationId=${conv.id}`} prefetch>
                                 <Button variant="outline" className="flex w-full items-center justify-between gap-3 py-6">
                                     <span className="flex min-w-0 items-center gap-3">
                                         <MessageSquare className="size-5 shrink-0 text-muted-foreground" />

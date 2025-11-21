@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -44,6 +45,8 @@ type Conversation = {
 }
 
 export default function ChatPane() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const backendUrl = getBackendUrl()
   const [mode, setMode] = React.useState<"document">("document")
   const [docs, setDocs] = React.useState<DocumentItem[]>([])
@@ -120,9 +123,66 @@ export default function ChatPane() {
     setSelectedDetail(null)
     if (selected?.id) loadSelectedDetail()
     // Clear active conversation and messages when switching documents
-    setActiveConversation(null)
-    setMessages([])
+    // Only clear if the active conversation doesn't belong to the new document
+    if (activeConversation?.document_id !== selected?.id) {
+      setActiveConversation(null)
+      setMessages([])
+    }
   }, [loadSelectedDetail, selected?.id])
+
+  // Handle URL parameters for deep linking
+  React.useEffect(() => {
+    const docId = searchParams.get("documentId")
+    const convId = searchParams.get("conversationId")
+
+    if (docId && (!selected || selected.id !== docId)) {
+      // Find the document in the list or create a temporary one
+      const doc = docs.find(d => d.id === docId)
+      if (doc) {
+        setSelected(doc)
+      } else {
+        // If not in the initial list, we might need to fetch it or set a placeholder
+        // For now, let's set a placeholder and let loadSelectedDetail fetch details
+        setSelected({ id: docId })
+      }
+    }
+
+    if (convId && docId) {
+      // If we have a conversation ID, try to load it
+      // We need to wait for conversations to load first, or fetch it directly
+      const fetchConversation = async () => {
+        try {
+          const res = await fetch(`${backendUrl}/api/v1/conversations/${convId}`, {
+            headers: { accept: "application/json" },
+          })
+          const data = await res.json().catch(() => null)
+          if (data) {
+             const convo: Conversation = {
+              id: data.id || data._id,
+              document_id: data.document_id,
+              title: data.title,
+              created_at: data.created_at,
+              updated_at: data.updated_at,
+              message_count: data.messages?.length || 0
+             }
+             setActiveConversation(convo)
+             // Load messages
+             if (data.messages) {
+                const loadedMessages: ChatMessage[] = data.messages.map((msg: any) => ({
+                  role: msg.role,
+                  content: msg.content,
+                  meta: msg.meta,
+                }))
+                setMessages(loadedMessages)
+             }
+          }
+        } catch (err) {
+          console.error("Failed to load conversation from URL", err)
+        }
+      }
+      fetchConversation()
+    }
+  }, [searchParams, backendUrl, docs])
 
   React.useEffect(() => {
     if (!scrollRef.current) return
@@ -317,6 +377,7 @@ export default function ChatPane() {
         setActiveConversation(newConvo)
         setMessages([])
         await loadConversations()
+        router.push(`/query?documentId=${selected.id}&conversationId=${newConvo.id}`)
       }
     } catch (err) {
       console.error("Failed to create conversation", err)
@@ -345,6 +406,7 @@ export default function ChatPane() {
   async function selectConversation(convo: Conversation) {
     setActiveConversation(convo)
     await loadConversationMessages(convo.id)
+    router.push(`/query?documentId=${convo.document_id}&conversationId=${convo.id}`)
   }
 
   async function deleteConversationById(conversationId: string) {
@@ -356,6 +418,7 @@ export default function ChatPane() {
       if (activeConversation?.id === conversationId) {
         setActiveConversation(null)
         setMessages([])
+        router.push(`/query?documentId=${selected?.id}`)
       }
     } catch (err) {
       console.error("Failed to delete conversation", err)
@@ -392,6 +455,7 @@ export default function ChatPane() {
             message_count: 0,
           }
           setActiveConversation(newConvo)
+          router.push(`/query?documentId=${selected.id}&conversationId=${newConvo.id}`)
         }
       } catch (err) {
         console.error("Failed to create conversation", err)
@@ -541,7 +605,7 @@ export default function ChatPane() {
               {conversations.map((convo) => (
                 <div
                   key={convo.id}
-                  className={`p-3 rounded-lg mb-1 cursor-pointer transition-colors ${
+                  className={`group p-3 rounded-lg mb-1 cursor-pointer transition-colors ${
                     activeConversation?.id === convo.id
                       ? "bg-accent border border-primary"
                       : "hover:bg-accent/50"
@@ -558,13 +622,13 @@ export default function ChatPane() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-6 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                      className="size-8 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100"
                       onClick={(e) => {
                         e.stopPropagation()
                         deleteConversationById(convo.id)
                       }}
                     >
-                      <Trash2 className="size-3" />
+                      <Trash2 className="size-4" />
                     </Button>
                   </div>
                 </div>
