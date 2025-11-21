@@ -13,7 +13,7 @@ services:
   #   build:
   #     context: ./
   #     dockerfile: Dockerfile.mlflow
-  #   container_name: vectorless-rag-mlflow
+  #   container_name: archivist-mlflow
   #   depends_on:
   #     - postgredb
   #     - minio
@@ -38,7 +38,7 @@ services:
   # FastAPI Backend
   backend:
     build: .
-    container_name: vectorless-rag-backend
+    container_name: archivist-backend
     image: alvinwen/archivist-backend:dev
     ports:
       - "8000:8000"
@@ -69,7 +69,7 @@ services:
   # MongoDB Database
   mongodb:
     image: mongo:7.0
-    container_name: vectorless-rag-mongodb
+    container_name: archivist-mongodb
     ports:
       - "27017:27017"
     environment:
@@ -94,7 +94,7 @@ services:
   # Redis Cache
   redis:
     image: redis:7.2-alpine
-    container_name: vectorless-rag-redis
+    container_name: archivist-redis
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
@@ -116,7 +116,7 @@ services:
 
   postgredb:
     image: postgres:15-alpine
-    container_name: vectorless-rag-postgredb
+    container_name: archivist-postgredb
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_DB=postgres
@@ -141,7 +141,7 @@ services:
   # MinIO Object Storage
   minio:
     image: minio/minio:latest
-    container_name: vectorless-rag-minio
+    container_name: archivist-minio
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -168,7 +168,7 @@ services:
   # MinIO Client for bucket initialization
   minio-client:
     image: minio/mc:latest
-    container_name: vectorless-rag-minio-client
+    container_name: archivist-minio-client
     depends_on:
       - minio
     entrypoint: >
@@ -205,7 +205,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: vectorless-rag-nginx
+    container_name: archivist-nginx
     depends_on:
       - frontend
       - backend
