@@ -79,8 +79,8 @@ function TopCard({
 }
 
 function RecentDocumentsCard() {
-    const [loading, setLoading] = React.useState(true)
-    const [items, setItems] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [items, setItems] = React.useState<Array<{ id: string; filename?: string; title?: string; status?: string; updated_at?: string }>>([])
     React.useEffect(() => {
         const backendUrl = getBackendUrl()
         async function fetchDocs() {
@@ -155,8 +155,8 @@ function RecentDocumentsCard() {
 }
 
 function RecentConversationsCard() {
-    const [loading, setLoading] = React.useState(true)
-    const [items, setItems] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [items, setItems] = React.useState<Array<{ id: string; document_id: string; title?: string; updated_at?: string }>>([])
     React.useEffect(() => {
         const backendUrl = getBackendUrl()
         async function fetchConversations() {
@@ -227,8 +227,8 @@ function RecentConversationsCard() {
 }
 
 function RecentAnalysisCard() {
-    const [loading, setLoading] = React.useState(true)
-    const [items, setItems] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [items, setItems] = React.useState<Array<{ id: string; analysis_id: string; document_id: string; document_title?: string; analysis_title?: string; completed_items?: number; total_items?: number; updated_at?: string; status?: string }>>([])
     React.useEffect(() => {
         const backendUrl = getBackendUrl()
         async function fetchAnalysisResults() {

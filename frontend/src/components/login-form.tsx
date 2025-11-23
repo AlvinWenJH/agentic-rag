@@ -85,9 +85,10 @@ export function LoginPage() {
 
             // Redirect to authenticated home
             router.push("/home");
-        } catch (err: any) {
+        } catch (err) {
             console.error(err);
-            setErrorMsg(err?.message ?? "Network error. Please try again.");
+            const message = err instanceof Error ? err.message : "Network error. Please try again.";
+            setErrorMsg(message);
         } finally {
             setIsSubmitting(false);
         }

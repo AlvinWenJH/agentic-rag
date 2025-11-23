@@ -25,13 +25,33 @@ type DocumentItem = {
   status?: string
 }
 
+type Usage = {
+  input_tokens?: number
+  output_tokens?: number
+  requests?: number
+  tool_calls?: number
+  cache_read_tokens?: number
+}
+
+type ReferencePath = { document_id: string; path: string; depth?: number }
+type RetrievedPage = { document_id: string; page: number }
+type References = { query_paths?: ReferencePath[]; retrieved_pages?: RetrievedPage[] }
+
 type ChatMessage = {
   role: "user" | "assistant" | "system"
   content: string
   meta?: {
-    usage?: any
-    references?: any
+    usage?: Usage
+    references?: References
   }
+}
+
+type SSEEvent = {
+  type?: "start" | "text_delta" | "tool_call" | "final_result" | "error"
+  content?: string
+  usage?: Usage
+  references?: References
+  error?: string
 }
 
 type Conversation = {
@@ -42,6 +62,14 @@ type Conversation = {
   created_at: string
   updated_at: string
   message_count: number
+}
+
+type QueryTreeNode = {
+  title?: string
+  node_type?: string
+  summary?: string
+  pages?: number[]
+  children?: QueryTreeNode[]
 }
 
 export default function ChatPane() {
@@ -62,7 +90,7 @@ export default function ChatPane() {
   const assistantIndexRef = React.useRef<number | null>(null)
   const [openRefsIndex, setOpenRefsIndex] = React.useState<number | null>(null)
   const [refsTab, setRefsTab] = React.useState<"query" | "pages">("query")
-  const [refsQueryTree, setRefsQueryTree] = React.useState<any | null>(null)
+  const [refsQueryTree, setRefsQueryTree] = React.useState<QueryTreeNode | null>(null)
   const [refsQueryLoading, setRefsQueryLoading] = React.useState(false)
   const [refsPagesImages, setRefsPagesImages] = React.useState<Record<string, string>>({})
   const [refsPagesLoading, setRefsPagesLoading] = React.useState(false)
@@ -167,14 +195,14 @@ export default function ChatPane() {
              }
              setActiveConversation(convo)
              // Load messages
-             if (data.messages) {
-                const loadedMessages: ChatMessage[] = data.messages.map((msg: any) => ({
-                  role: msg.role,
-                  content: msg.content,
-                  meta: msg.meta,
-                }))
-                setMessages(loadedMessages)
-             }
+            if (data.messages) {
+               const loadedMessages: ChatMessage[] = data.messages.map((msg: { role: ChatMessage["role"]; content: string; meta?: { usage?: Usage; references?: References } }) => ({
+                 role: msg.role,
+                 content: msg.content,
+                 meta: msg.meta,
+               }))
+               setMessages(loadedMessages)
+            }
           }
         } catch (err) {
           console.error("Failed to load conversation from URL", err)
@@ -203,7 +231,7 @@ export default function ChatPane() {
     return `${v.toFixed(1)} ${u[i]}`
   }
 
-  function mergeTrees(a: any, b: any): any {
+  function mergeTrees(a: QueryTreeNode, b: QueryTreeNode): QueryTreeNode {
     if (!a) return b
     if (!b) return a
     const titleA = a?.title
@@ -215,13 +243,13 @@ export default function ChatPane() {
       return { ...a, children }
     }
     const pages = Array.isArray(a?.pages) || Array.isArray(b?.pages) ? Array.from(new Set([...(a?.pages || []), ...(b?.pages || [])])) : undefined
-    const map = new Map<string, any>()
+    const map = new Map<string, QueryTreeNode>()
     const ac = Array.isArray(a?.children) ? a.children : []
     const bc = Array.isArray(b?.children) ? b.children : []
     for (const c of ac) map.set(`${c.title}|${c.node_type}`, c)
     for (const c of bc) {
       const key = `${c.title}|${c.node_type}`
-      if (map.has(key)) map.set(key, mergeTrees(map.get(key), c))
+      if (map.has(key)) map.set(key, mergeTrees(map.get(key)!, c))
       else map.set(key, c)
     }
     return { ...a, pages, children: Array.from(map.values()) }
@@ -277,18 +305,18 @@ export default function ChatPane() {
       return
     }
     const refs = messages[openRefsIndex]?.meta?.references || {}
-    const qps: Array<{ document_id: string; path: string; depth?: number }> = Array.isArray(refs?.query_paths) ? refs.query_paths : []
-    const rps: Array<{ document_id: string; page: number }> = Array.isArray(refs?.retrieved_pages) ? refs.retrieved_pages : []
+    const qps: ReferencePath[] = Array.isArray(refs?.query_paths) ? refs.query_paths : []
+    const rps: RetrievedPage[] = Array.isArray(refs?.retrieved_pages) ? refs.retrieved_pages : []
     if (qps.length) {
       setRefsQueryLoading(true)
         ; (async () => {
           try {
-            let merged: any | null = null
+            let merged: QueryTreeNode | null = null
             await Promise.all(qps.map(async (q) => {
               const u = `${backendUrl}/api/v1/documents/${q.document_id}/tree/path?path=${encodeURIComponent(q.path)}&depth=${q.depth ?? 2}&serialize=false`
               const res = await fetch(u, { headers: { accept: "application/json" } })
               const json = await res.json().catch(() => ({}))
-              const subtree = json?.subtree || null
+              const subtree = (json?.subtree || null) as QueryTreeNode | null
               if (subtree) merged = merged ? mergeTrees(merged, subtree) : subtree
             }))
             setRefsQueryTree(merged)
@@ -391,7 +419,7 @@ export default function ChatPane() {
       })
       const data = await res.json().catch(() => null)
       if (data?.messages) {
-        const loadedMessages: ChatMessage[] = data.messages.map((msg: any) => ({
+        const loadedMessages: ChatMessage[] = data.messages.map((msg: { role: ChatMessage["role"]; content: string; meta?: { usage?: Usage; references?: References } }) => ({
           role: msg.role,
           content: msg.content,
           meta: msg.meta,
@@ -490,9 +518,9 @@ export default function ChatPane() {
           const line = part.split("\n").find((l) => l.startsWith("data:")) || ""
           const jsonStr = line.replace(/^data:\s*/, "")
           if (!jsonStr) continue
-          let evt: any
+          let evt: SSEEvent | null
           try {
-            evt = JSON.parse(jsonStr)
+            evt = JSON.parse(jsonStr) as SSEEvent
           } catch {
             continue
           }
@@ -928,7 +956,7 @@ export default function ChatPane() {
   )
 }
 
-function TreeNodeViewInline({ node, depth }: { node: any; depth: number }) {
+function TreeNodeViewInline({ node, depth }: { node: QueryTreeNode; depth: number }) {
   const hasChildren = Array.isArray(node?.children) && node.children.length > 0
   const typeLabel = node?.node_type === "L1" ? "Hierarchy" : node?.node_type === "L2" ? "Topic" : node?.node_type === "L3" ? "Detail" : node?.node_type
   return (
@@ -950,7 +978,7 @@ function TreeNodeViewInline({ node, depth }: { node: any; depth: number }) {
       </div>
       {hasChildren ? (
         <div className="ml-6 mt-2 border-l pl-4">
-          {node.children!.map((child: any, i: number) => (
+          {node.children!.map((child: QueryTreeNode, i: number) => (
             <TreeNodeViewInline key={i} node={child} depth={depth + 1} />
           ))}
         </div>

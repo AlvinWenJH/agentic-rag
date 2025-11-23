@@ -25,7 +25,11 @@ type DocumentItem = {
   document_type?: string
   description?: string
   tags?: string[]
-  metadata?: any
+  metadata?: {
+    page_count?: number | null
+    file_size?: number | null
+    [key: string]: unknown
+  }
   page_count?: number | null
   image_count?: number | null
   processing_time?: number | null
@@ -148,16 +152,17 @@ export default function DocumentsDashboard() {
     const ws = new WebSocket(wsUrl)
 
     ws.onmessage = async (evt) => {
-      let payload: any = null
+      let payload: unknown = null
       try {
         payload = JSON.parse(evt.data)
       } catch {
         payload = null
       }
       if (!payload) return
-      const rid = payload?.resource_id ?? payload?.document_id
+      const obj = payload as { resource_id?: string; document_id?: string; status?: string; error?: string; type?: string }
+      const rid = obj.resource_id ?? obj.document_id
       if (!rid) return
-      const status = normalizeStatus(payload?.status)
+      const status = normalizeStatus(obj.status)
 
       setDocs((prev) => {
         const next = prev.map((d) => {
@@ -166,14 +171,14 @@ export default function DocumentsDashboard() {
             ...d,
             status: status ?? d.status,
             updated_at: new Date().toISOString(),
-            error_message: payload?.error ?? d.error_message,
-          }
-        })
-        return next
+          error_message: obj.error ?? d.error_message,
+        }
+      })
+      return next
       })
 
-      if (payload?.type === "processing_completed" || payload?.type === "processing_failed") {
-        if (payload?.type === "processing_completed") {
+      if (obj.type === "processing_completed" || obj.type === "processing_failed") {
+        if (obj.type === "processing_completed") {
           try {
             const name = (() => {
               const d = docs.find((x) => x.id === rid)

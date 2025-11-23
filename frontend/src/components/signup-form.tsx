@@ -87,9 +87,10 @@ export function SignUpPage() {
             form.reset({ email: "", username: "", full_name: "", password: "" });
             toast("Successfully signed up", { description: "Redirecting to sign in in 3s..." });
             setRedirectCountdown(3);
-        } catch (err: any) {
+        } catch (err) {
             console.error(err);
-            setErrorMsg(err?.message ?? "Network error. Please try again.");
+            const message = err instanceof Error ? err.message : "Network error. Please try again.";
+            setErrorMsg(message);
         } finally {
             setIsSubmitting(false);
         }

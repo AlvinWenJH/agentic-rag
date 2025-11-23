@@ -2,6 +2,8 @@
 
 A visual-first document processing and query system that uses computer vision and AI for intelligent document analysis without traditional vector embeddings.
 
+![image.png](assets/landing-page.png)
+
 ## 🚀 Overview
 
 The Achivist system revolutionizes document processing by:

@@ -26,14 +26,14 @@ const ConceptTreeViz: React.FC<Props> = ({ data }) => {
             .attr("transform", `translate(${width / 2}, 50)`); // Top-down
 
         // Convert data to hierarchy
-        const root = d3.hierarchy(data);
+        const root = d3.hierarchy<ConceptNode>(data);
         const treeLayout = d3.tree<ConceptNode>().size([width - 100, height - 150]);
 
         treeLayout(root);
 
         // Links
         svg.selectAll(".link")
-            .data(root.links())
+            .data(root.links() as d3.HierarchyPointLink<ConceptNode>[])
             .enter()
             .append("path")
             .attr("class", "link")
@@ -41,18 +41,19 @@ const ConceptTreeViz: React.FC<Props> = ({ data }) => {
             .attr("stroke", "#e879f9") // fuchsia-400
             .attr("stroke-opacity", 0.4)
             .attr("stroke-width", 1.5)
-            .attr("d", d3.linkVertical()
-                .x((d: any) => d.x)
-                .y((d: any) => d.y) as any
+            .attr("d",
+              d3.linkVertical<d3.HierarchyPointLink<ConceptNode>, d3.HierarchyPointLink<ConceptNode>>()
+                .x((d: d3.HierarchyPointLink<ConceptNode>) => d.target.x)
+                .y((d: d3.HierarchyPointLink<ConceptNode>) => d.target.y)
             );
 
         // Nodes
         const node = svg.selectAll(".node")
-            .data(root.descendants())
+            .data(root.descendants() as d3.HierarchyPointNode<ConceptNode>[])
             .enter()
             .append("g")
             .attr("class", "node")
-            .attr("transform", (d: any) => `translate(${d.x},${d.y})`);
+            .attr("transform", (d: d3.HierarchyPointNode<ConceptNode>) => `translate(${d.x},${d.y})`);
 
         node.append("circle")
             .attr("r", 6)
@@ -61,9 +62,9 @@ const ConceptTreeViz: React.FC<Props> = ({ data }) => {
             .attr("stroke-width", 2);
 
         node.append("text")
-            .attr("dy", (d: any) => d.children ? -15 : 20)
+            .attr("dy", (d: d3.HierarchyPointNode<ConceptNode>) => d.children ? -15 : 20)
             .style("text-anchor", "middle")
-            .text((d: any) => d.data.name)
+            .text((d: d3.HierarchyPointNode<ConceptNode>) => d.data.name)
             .style("fill", "#e2e8f0")
             .style("font-size", "12px")
             .style("font-family", "Inter, sans-serif")

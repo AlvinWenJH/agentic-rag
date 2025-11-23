@@ -61,6 +61,14 @@ type AnalysisResult = {
   updated_at: string
 }
 
+type QueryTreeNode = {
+  title?: string
+  node_type?: string
+  summary?: string
+  pages?: number[]
+  children?: QueryTreeNode[]
+}
+
 export default function AnalysisResultPage() {
   const params = useParams()
   const router = useRouter()
@@ -68,7 +76,7 @@ export default function AnalysisResultPage() {
   const [loading, setLoading] = React.useState(true)
   const [result, setResult] = React.useState<AnalysisResult | null>(null)
   const [openRefsItemIndex, setOpenRefsItemIndex] = React.useState<number | null>(null)
-  const [refsQueryTree, setRefsQueryTree] = React.useState<any | null>(null)
+  const [refsQueryTree, setRefsQueryTree] = React.useState<QueryTreeNode | null>(null)
   const [refsQueryLoading, setRefsQueryLoading] = React.useState(false)
   const [refsPagesImages, setRefsPagesImages] = React.useState<Record<string, string>>({})
   const [refsPagesLoading, setRefsPagesLoading] = React.useState(false)
@@ -108,7 +116,7 @@ export default function AnalysisResultPage() {
   }, [analysisId, documentId, backendUrl])
 
   // Merge tree function
-  function mergeTrees(a: any, b: any): any {
+  function mergeTrees(a: QueryTreeNode, b: QueryTreeNode): QueryTreeNode {
     if (!a) return b
     if (!b) return a
     const titleA = a?.title
@@ -120,13 +128,13 @@ export default function AnalysisResultPage() {
       return { ...a, children }
     }
     const pages = Array.isArray(a?.pages) || Array.isArray(b?.pages) ? Array.from(new Set([...(a?.pages || []), ...(b?.pages || [])])) : undefined
-    const map = new Map<string, any>()
+    const map = new Map<string, QueryTreeNode>()
     const ac = Array.isArray(a?.children) ? a.children : []
     const bc = Array.isArray(b?.children) ? b.children : []
     for (const c of ac) map.set(`${c.title}|${c.node_type}`, c)
     for (const c of bc) {
       const key = `${c.title}|${c.node_type}`
-      if (map.has(key)) map.set(key, mergeTrees(map.get(key), c))
+      if (map.has(key)) map.set(key, mergeTrees(map.get(key)!, c))
       else map.set(key, c)
     }
     return { ...a, pages, children: Array.from(map.values()) }
@@ -192,12 +200,12 @@ export default function AnalysisResultPage() {
       setRefsQueryLoading(true)
         ; (async () => {
           try {
-            let merged: any | null = null
+            let merged: QueryTreeNode | null = null
             await Promise.all(qps.map(async (q) => {
               const u = `${backendUrl}/api/v1/documents/${q.document_id}/tree/path?path=${encodeURIComponent(q.path)}&depth=${q.depth ?? 2}&serialize=false`
               const res = await fetch(u, { headers: { accept: "application/json" } })
               const json = await res.json().catch(() => ({}))
-              const subtree = json?.subtree || null
+              const subtree = (json?.subtree || null) as QueryTreeNode | null
               if (subtree) merged = merged ? mergeTrees(merged, subtree) : subtree
             }))
             setRefsQueryTree(merged)
@@ -570,7 +578,7 @@ export default function AnalysisResultPage() {
   )
 }
 
-function TreeNodeViewInline({ node, depth }: { node: any; depth: number }) {
+function TreeNodeViewInline({ node, depth }: { node: QueryTreeNode; depth: number }) {
   const hasChildren = Array.isArray(node?.children) && node.children.length > 0
   const typeLabel = node?.node_type === "L1" ? "Hierarchy" : node?.node_type === "L2" ? "Topic" : node?.node_type === "L3" ? "Detail" : node?.node_type
   return (
@@ -592,7 +600,7 @@ function TreeNodeViewInline({ node, depth }: { node: any; depth: number }) {
       </div>
       {hasChildren ? (
         <div className="ml-6 mt-2 border-l pl-4">
-          {node.children!.map((child: any, i: number) => (
+          {node.children!.map((child: QueryTreeNode, i: number) => (
             <TreeNodeViewInline key={i} node={child} depth={depth + 1} />
           ))}
         </div>

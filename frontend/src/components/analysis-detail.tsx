@@ -760,7 +760,7 @@ export default function AnalysisDetail({ analysisId }: { analysisId: string }) {
           <DialogHeader>
             <DialogTitle>Delete analysis result?</DialogTitle>
             <DialogDescription>
-              This will permanently delete this document's analysis result.
+              This will permanently delete this document’s analysis result.
             </DialogDescription>
           </DialogHeader>
           <div className="text-sm">
