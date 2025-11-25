@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { getBackendUrl } from "@/lib/env"
+import { parseUtcDate } from "@/lib/utils"
 
 type AnalysisItem = {
   id: string
@@ -400,8 +401,8 @@ function formatNumber(n: number): string {
 
 function formatTime(value?: string): string {
   if (!value) return "—"
-  const d = new Date(value)
-  if (isNaN(d.getTime())) return value
+  const d = parseUtcDate(value)
+  if (!d) return value!
   return d.toLocaleDateString()
 }
 

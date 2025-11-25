@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getBackendUrl } from "@/lib/env"
+import { parseUtcDate } from "@/lib/utils"
 import { Settings, Hash, BarChart3, Cpu, Database, Send as SendIcon, Bot, FileText, ZoomOut, ZoomIn, RefreshCcw, MessageSquare, Plus, Trash2 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Spinner } from "@/components/ui/spinner"
@@ -644,7 +645,7 @@ export default function ChatPane() {
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{convo.title}</div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        {new Date(convo.updated_at).toLocaleDateString()}
+                        {(parseUtcDate(convo.updated_at)?.toLocaleDateString() ?? "—")}
                       </div>
                     </div>
                     <Button

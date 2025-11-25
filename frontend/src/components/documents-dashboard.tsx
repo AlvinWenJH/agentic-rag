@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { getBackendUrl } from "@/lib/env"
+import { parseUtcDate } from "@/lib/utils"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "sonner"
 
@@ -701,8 +702,7 @@ function formatBytes(bytes?: number): string {
 
 function formatTime(value?: string): string {
   if (!value) return "—"
-  const normalized = value.replace(/(\.\d{3})\d+$/, "$1").replace(/\.\d+$/, (m) => (m.length > 4 ? m.slice(0, 4) : m))
-  const d = new Date(normalized)
-  if (isNaN(d.getTime())) return value
+  const d = parseUtcDate(value)
+  if (!d) return value!
   return d.toLocaleDateString()
 }

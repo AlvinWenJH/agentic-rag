@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getBackendUrl } from "@/lib/env"
+import { parseUtcDate } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ReactFlow, Background, Controls, Handle, Position, useReactFlow, type Node, type Edge } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
@@ -76,8 +77,8 @@ function resolvePageCount(doc?: DocDetail | null): number {
 
 function formatDateTime(dt?: string | null) {
   if (!dt) return "—"
-  const d = new Date(dt)
-  if (isNaN(d.getTime())) return dt
+  const d = parseUtcDate(dt)
+  if (!d) return dt as string
   return d.toLocaleString(undefined, {
     year: "numeric",
     month: "short",

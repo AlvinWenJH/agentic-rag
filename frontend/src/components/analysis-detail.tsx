@@ -21,6 +21,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 import { getBackendUrl } from "@/lib/env"
+import { parseUtcDate } from "@/lib/utils"
 import { toast } from "sonner"
 import { Spinner } from "@/components/ui/spinner"
 
@@ -76,8 +77,8 @@ type AnalysisResult = {
 
 function formatDateTime(dt?: string | null) {
   if (!dt) return "—"
-  const d = new Date(dt)
-  if (isNaN(d.getTime())) return dt
+  const d = parseUtcDate(dt)
+  if (!d) return dt as string
   return d.toLocaleString(undefined, {
     year: "numeric",
     month: "short",
@@ -818,8 +819,8 @@ export default function AnalysisDetail({ analysisId }: { analysisId: string }) {
 
 function formatTime(value?: string): string {
   if (!value) return "—"
-  const d = new Date(value)
-  if (isNaN(d.getTime())) return value
+  const d = parseUtcDate(value)
+  if (!d) return value!
   return d.toLocaleDateString()
 }
 

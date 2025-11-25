@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyMedia, EmptyContent } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getBackendUrl } from "@/lib/env"
+import { parseUtcDate } from "@/lib/utils"
 
 export default function HomeDashboard() {
     return (
@@ -372,12 +373,7 @@ function StatusIcon({ status }: { status?: string }) {
 
 function formatTimeAgo(value?: string) {
     if (!value) return "—"
-    const normalized = value.replace(/(\.\d{3})\d+$/, "$1").replace(/\.\d+$/, (m) => (m.length > 4 ? m.slice(0, 4) : m))
-    const tryDate = (s: string) => {
-        const d = new Date(s)
-        return isNaN(d.getTime()) ? undefined : d
-    }
-    const d = tryDate(normalized) ?? tryDate(value.replace(/\.\d+$/, ""))
+    const d = parseUtcDate(value)
     if (!d) return value
 
     const now = new Date()
